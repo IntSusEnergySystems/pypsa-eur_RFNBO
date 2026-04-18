@@ -53,14 +53,16 @@ def add_brownfield(
         Threshold for removing assets with low capacity
     """
     logger.info(f"Preparing brownfield for the year {year}")
-
+    n.lines = n.lines.drop_duplicates(subset=["bus0", "bus1"])
     # electric transmission grid set optimised capacities of previous as minimum
     n.lines.s_nom_min = n_p.lines.s_nom_opt
+    n.lines.s_nom = n_p.lines.s_nom_opt
     # Clamp s_nom_max to be at least s_nom_min to prevent solver infeasibility
     # from floating-point differences between s_nom_opt and s_nom_max
     n.lines.s_nom_max = n.lines.s_nom_max.clip(lower=n.lines.s_nom_min)
     dc_i = n.links[n.links.carrier == "DC"].index
     n.links.loc[dc_i, "p_nom_min"] = n_p.links.loc[dc_i, "p_nom_opt"]
+    n.links.loc[dc_i, "p_nom"] = n_p.links.loc[dc_i, "p_nom_opt"]
     n.links.loc[dc_i, "p_nom_max"] = n.links.loc[dc_i, "p_nom_max"].clip(
         lower=n.links.loc[dc_i, "p_nom_min"]
     )

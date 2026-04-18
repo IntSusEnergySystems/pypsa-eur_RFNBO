@@ -81,6 +81,57 @@ countries:
 - SI
 - SK
 
+transmission_limit:
+    2025: 1.0
+    2030: 1.0
+    2035: 1.1
+    2040: 1.1
+    2045: 1.1
+    2050: 1.1
+    
+TYNDP_values:
+  at_ch: 1200
+  at_cz: 900
+  at_de: 5400
+  at_hu: 800
+  at_it: 800
+  at_si: 950
+  be_fr: 6300
+  be_lu: 680
+  be_nl: 3400
+  bg_ro: 1500
+  ch_de: 4200
+  ch_fr: 3700
+  ch_it: 3750
+  cz_de: 2100
+  cz_pl: 1400
+  cz_sk: 1800
+  de_dk: 4100
+  de_fr: 3300
+  de_lu: 2300
+  de_pl: 3000
+  de_nl: 5000
+  dk_se: 750
+  ee_lv: 1100
+  es_fr: 5000
+  es_pt: 4200
+  fi_se: 2400
+  fr_it: 4100
+  hr_hu: 1700
+  hr_it: 1000
+  hr_si: 2000
+  hu_ro: 1100
+  hu_sk: 2600
+  it_si: 660
+  lt_lv: 950
+  no_se: 3695
+  pl_sk: 1980
+  bg_gr: 1500
+  fi_no: 100
+  fr_lu: 100
+  gb_ie: 500
+  lt_pl: 500
+  hu_si: 600
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
 snapshots:
   start: "2013-01-01"
@@ -516,7 +567,6 @@ pypsa_eur:
   - "solar-hsat"
   - solar
   - ror
-  - nuclear
   StorageUnit:
   - PHS
   - hydro
@@ -1176,12 +1226,12 @@ solving:
     model_kwargs:
       solver_dir: ""
   agg_p_nom_limits:
-    agg_offwind: false
-    agg_solar: false
-    include_existing: false
+    agg_offwind: true
+    agg_solar: true
+    include_existing: true
     file: data/agg_p_nom_minmax.csv
   constraints:
-    CCL: false
+    CCL: true
     EQ: false
     BAU: false
     SAFE: false

@@ -609,7 +609,7 @@ def add_carrier_buses(
         capital_cost=capital_cost,
     )
 
-    fossils = ["coal", "gas", "oil", "lignite"]
+    fossils = ["coal", "gas", "oil", "lignite", "uranium"]
     if options["fossil_fuels"] and carrier in fossils:
         suffix = ""
 
@@ -1592,7 +1592,7 @@ def insert_electricity_distribution_grid(
     loads = n.loads.index[n.loads.carrier.str.contains("electric")]
     n.loads.loc[loads, "bus"] += " low voltage"
 
-    bevs = n.links.index[n.links.carrier == "BEV charger"]
+    bevs = n.links.index[n.links.carrier == "EV charger"]
     n.links.loc[bevs, "bus0"] += " low voltage"
 
     v2gs = n.links.index[n.links.carrier == "V2G"]
@@ -2321,11 +2321,11 @@ def add_EVs(
     n.add(
         "Link",
         spatial.nodes,
-        suffix=" BEV charger",
+        suffix=" EV charger",
         bus0=spatial.nodes,
         bus1=spatial.nodes + " EV battery",
         p_nom=p_nom,
-        carrier="BEV charger",
+        carrier="EV charger",
         p_max_pu=avail_profile.loc[n.snapshots, spatial.nodes],
         lifetime=1,
         efficiency=options["bev_charge_efficiency"],

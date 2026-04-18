@@ -584,6 +584,67 @@ def prepare_network(
         n.stores.e_cyclic = False
         n.stores.e_initial = 0
 
+def imposed_transmission_limit(n, config):
+    ''' This funtion impse values for TYNDP for transmissions lines'''
+    tyndp_values_mapping = {
+      ("AT2 0", "CH2 0"): {"s_nom": "at_ch", "s_nom_min": "at_ch"},
+      ("AT2 0", "CZ2 0"): {"s_nom": "at_cz", "s_nom_min": "at_cz"},
+      ("BE2 0", "NL2 0"): {"s_nom": "be_nl", "s_nom_min": "be_nl"},
+      ("BG2 0", "GR2 0"): {"s_nom": "bg_gr", "s_nom_min": "bg_gr"},
+      ("BG2 0", "RO2 0"): {"s_nom": "bg_ro", "s_nom_min": "bg_ro"},
+      ("CH2 0", "DE2 0"): {"s_nom": "ch_de", "s_nom_min": "ch_de"},
+      ("CH2 0", "FR2 0"): {"s_nom": "ch_fr", "s_nom_min": "ch_fr"},
+      ("CH2 0", "IT2 0"): {"s_nom": "ch_it", "s_nom_min": "ch_it"},
+      ("CZ2 0", "DE2 0"): {"s_nom": "cz_de", "s_nom_min": "cz_de"},
+      ("CZ2 0", "PL2 0"): {"s_nom": "cz_pl", "s_nom_min": "cz_pl"},
+      ("CZ2 0", "SK2 0"): {"s_nom": "cz_sk", "s_nom_min": "cz_sk"},
+      ("DE2 0", "DK2 0"): {"s_nom": "de_dk", "s_nom_min": "de_dk"},
+      ("DE2 0", "FR2 0"): {"s_nom": "de_fr", "s_nom_min": "de_fr"},
+      ("DE2 0", "LU2 0"): {"s_nom": "de_lu", "s_nom_min": "de_lu"},
+      ("DE2 0", "NL2 0"): {"s_nom": "de_nl", "s_nom_min": "de_nl"},
+      ("DE2 0", "PL2 0"): {"s_nom": "de_pl", "s_nom_min": "de_pl"},
+      ("DK0 0", "SE0 0"): {"s_nom": "dk_se", "s_nom_min": "dk_se"},
+      ("EE2 0", "LV2 0"): {"s_nom": "ee_lv", "s_nom_min": "ee_lv"},
+      ("ES2 0", "FR2 0"): {"s_nom": "es_fr", "s_nom_min": "es_fr"},
+      ("AT2 0", "DE2 0"): {"s_nom": "at_de", "s_nom_min": "at_de"},
+      ("ES2 0", "PT2 0"): {"s_nom": "es_pt", "s_nom_min": "es_pt"},
+      ("FI0 0", "SE0 0"): {"s_nom": "fi_se", "s_nom_min": "fi_se"},
+      ("FI0 0", "NO0 0"): {"s_nom": "fi_no", "s_nom_min": "fi_no"},
+      ("FR2 0", "IT2 0"): {"s_nom": "fr_it", "s_nom_min": "fr_it"},
+      ("FR2 0", "LU2 0"): {"s_nom": "fr_lu", "s_nom_min": "fr_lu"},
+      ("GB3 0", "IE3 0"): {"s_nom": "gb_ie", "s_nom_min": "gb_ie"},
+      ("HR2 0", "HU2 0"): {"s_nom": "hr_hu", "s_nom_min": "hr_hu"},
+      ("HR2 0", "IT2 0"): {"s_nom": "hr_it", "s_nom_min": "hr_it"},
+      ("HR2 0", "SI2 0"): {"s_nom": "hr_si", "s_nom_min": "hr_si"},
+      ("HU2 0", "RO2 0"): {"s_nom": "hu_ro", "s_nom_min": "hu_ro"},
+      ("HU2 0", "SK2 0"): {"s_nom": "hu_sk", "s_nom_min": "hu_sk"},
+      ("HU2 0", "SI2 0"): {"s_nom": "hu_si", "s_nom_min": "hu_si"},
+      ("IT2 0", "SI2 0"): {"s_nom": "it_si", "s_nom_min": "it_si"},
+      ("LT2 0", "LV2 0"): {"s_nom": "lt_lv", "s_nom_min": "lt_lv"},
+      ("LT2 0", "PL2 0"): {"s_nom": "lt_pl", "s_nom_min": "lt_pl"},
+      ("AT2 0", "HU2 0"): {"s_nom": "at_hu", "s_nom_min": "at_hu"},
+      ("NO0 0", "SE0 0"): {"s_nom": "no_se", "s_nom_min": "no_se"},
+      ("PL2 0", "SK2 0"): {"s_nom": "pl_sk", "s_nom_min": "pl_sk"},
+      ("AT2 0", "IT2 0"): {"s_nom": "at_it", "s_nom_min": "at_it"},
+      ("AT2 0", "SI2 0"): {"s_nom": "at_si", "s_nom_min": "at_si"},
+      ("BE2 0", "FR2 0"): {"s_nom": "be_fr", "s_nom_min": "be_fr"},
+      ("BE2 0", "LU2 0"): {"s_nom": "be_lu", "s_nom_min": "be_lu"},}
+    planning_horizon = int(snakemake.wildcards.planning_horizons[-4:])
+    mask = (n.links.index.str.startswith("TYNDP")) & (n.links["build_year"] > planning_horizon)
+    n.links.loc[mask, "p_nom_extendable"] = False
+    if planning_horizon == 2025:
+     n.lines = n.lines.drop_duplicates(subset=["bus0", "bus1"])
+     for index, row in n.lines.iterrows():
+        key = (row["bus0"], row["bus1"])
+        if key in tyndp_values_mapping:
+         values = tyndp_values_mapping[key]
+         n.lines.loc[index, "s_nom"] = config["TYNDP_values"][values["s_nom"]]
+         n.lines.loc[index, "s_nom_min"] = config["TYNDP_values"][values["s_nom_min"]]
+    n.lines["s_nom_max"] = n.lines["s_nom"] * config["transmission_limit"][planning_horizon]
+    condition = ((n.links['carrier'] == 'DC') & (n.links['p_nom'] != 0))
+    n.links.loc[condition, "p_nom_max"] = n.links.loc[condition, "p_nom"] * config["transmission_limit"][planning_horizon]
+    
+    return n
 
 def add_CCL_constraints(
     n: pypsa.Network, config: dict, planning_horizons: str | None
@@ -1502,7 +1563,9 @@ if __name__ == "__main__":
         limit_max_growth=snakemake.params.get("sector", {}).get("limit_max_growth"),
         rolling_horizon=cf_solving["rolling_horizon"],
     )
-
+    n = imposed_transmission_limit(
+        n,
+        config=snakemake.config,)
     # Determine solve mode
     rolling_horizon = cf_solving.get("rolling_horizon", False)
     skip_iterations = cf_solving.get("skip_iterations", False)

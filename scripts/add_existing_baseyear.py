@@ -188,7 +188,8 @@ def add_power_capacities_installed_before_baseyear(
     logger.debug(f"Adding power capacities installed before {baseyear}")
 
     df_agg = pd.read_csv(powerplants_file, index_col=0)
-
+    df_agg.loc[df_agg['Name'] == 'Doel', 'Capacity'] = 2000
+    df_agg.loc[df_agg['Name'] == 'Doel', 'DateOut'] = 2035
     rename_fuel = {
         "Hard Coal": "coal",
         "Lignite": "lignite",
