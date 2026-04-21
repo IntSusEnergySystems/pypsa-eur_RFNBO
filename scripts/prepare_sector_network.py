@@ -6264,7 +6264,7 @@ if __name__ == "__main__":
     max_hours = snakemake.params.electricity["max_hours"]
 
     costs = load_costs(snakemake.input.costs)
-
+    
     pop_weighted_energy_totals = (
         pd.read_csv(snakemake.input.pop_weighted_energy_totals, index_col=0) * nyears
     )
@@ -6310,7 +6310,7 @@ if __name__ == "__main__":
             )
 
     add_eu_bus(n)
-
+    config = snakemake.config
     emission_prices = snakemake.params["emission_prices"]
     co2_price = (
         get(emission_prices["co2"], investment_year)
@@ -6533,14 +6533,18 @@ if __name__ == "__main__":
         limit = co2_cap.loc[investment_year]
     else:
         limit = get(co2_budget, investment_year)
-    add_co2limit(
-        n,
-        options,
-        snakemake.input.co2_totals_name,
-        snakemake.params.countries,
-        nyears,
-        limit,
-    )
+    # rfnbo_scenario = config.get("RFNBO_scenario", False)
+    # baseline_year = int(snakemake.wildcards.planning_horizons[-4:])
+    # if not rfnbo_scenario:
+    #  if baseline_year != 2025:
+    #   add_co2limit(
+    #     n,
+    #     options,
+    #     snakemake.input.co2_totals_name,
+    #     snakemake.params.countries,
+    #     nyears,
+    #     limit,
+    #  )
 
     maxext = snakemake.params["lines"]["max_extension"]
     if maxext is not None:

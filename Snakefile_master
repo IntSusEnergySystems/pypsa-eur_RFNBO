@@ -1,0 +1,21 @@
+from snakemake.utils import min_version
+
+min_version("8.5")
+
+rule run_snakefile_baseline:
+    output: touch("run_snakefile_baseline.done")
+    log: "logs/run_snakefile_baseline.done",
+    shell:
+        "snakemake --snakefile Snakefile_baseline --cores 1 -call prepare_results"
+
+rule run_snakefile_RFNBO:
+    input: "run_snakefile_baseline.done"
+    output: touch("run_snakefile_RFNBO.done")
+    log: "logs/run_snakefile_RFNBO.done",
+    shell:
+        "snakemake --snakefile Snakefile_RFNBO --cores 1 -call prepare_results"
+
+
+rule run_all_snakefiles:
+    input: "run_snakefile_RFNBO.done"
+

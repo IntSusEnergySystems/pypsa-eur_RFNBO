@@ -43,7 +43,7 @@ import yaml
 from linopy.remote.oetc import OetcCredentials, OetcHandler, OetcSettings
 from pypsa.descriptors import get_activity_mask
 from pypsa.descriptors import get_switchable_as_dense as get_as_dense
-
+from prepare_sector_network import determine_emission_sectors
 from scripts._benchmark import memory_logger
 from scripts._helpers import (
     PYPSA_V1,
@@ -562,8 +562,8 @@ def prepare_network(
         nhours = solve_opts["nhours"]
         n.set_snapshots(n.snapshots[:nhours])
         n.snapshot_weightings[:] = 8760.0 / nhours
-
-    if foresight == "myopic" and planning_horizons:
+    config=snakemake.config
+    if not config['solving']['constraints']['CCL'] and foresight == "myopic" and planning_horizons:
         add_land_use_constraint(n, planning_horizons)
 
     if foresight == "perfect":
@@ -640,6 +640,8 @@ def imposed_transmission_limit(n, config):
          values = tyndp_values_mapping[key]
          n.lines.loc[index, "s_nom"] = config["TYNDP_values"][values["s_nom"]]
          n.lines.loc[index, "s_nom_min"] = config["TYNDP_values"][values["s_nom_min"]]
+    if planning_horizon == 2030:
+        n.links.loc["BE2 0 nuclear-1985", "p_nom"] = 6134.96
     n.lines["s_nom_max"] = n.lines["s_nom"] * config["transmission_limit"][planning_horizon]
     condition = ((n.links['carrier'] == 'DC') & (n.links['p_nom'] != 0))
     n.links.loc[condition, "p_nom_max"] = n.links.loc[condition, "p_nom"] * config["transmission_limit"][planning_horizon]
@@ -1280,6 +1282,242 @@ def add_co2_atmosphere_constraint(n, snapshots):
 
             n.model.add_constraints(lhs <= rhs, name=f"GlobalConstraint-{name}")
 
+def add_co2limit_country(n, limit_countries, nyears=1.0):
+    """
+    Add a set of emissions limit constraints for specified countries.
+    The countries and emissions limits are specified in the config file entry 'co2_budget_country_{investment_year}'.
+    Parameters
+    ----------
+    n : pypsa.Network
+    config : dict
+    limit_countries : dict
+    nyears: float, optional
+        Used to scale the emissions constraint to the number of snapshots of the base network.
+    """
+    logger.info(f"Adding CO2 budget limit for each country as per unit of 1990 levels")
+
+    countries = n.config["countries"]
+
+    # TODO: import function from prepare_sector_network? Move to common place?
+    sectors = determine_emission_sectors(options)
+
+    # convert Mt to tCO2
+    co2_totals = 1e6 * pd.read_csv(snakemake.input.co2_totals_name, index_col=0)
+    co2_limit_countries = co2_totals.loc[countries, sectors].sum(axis=1)
+    co2_limit_countries = co2_limit_countries.loc[
+        co2_limit_countries.index.isin(limit_countries.keys())
+    ]
+    co2_limit_countries *= co2_limit_countries.index.map(limit_countries) * nyears
+    co2_limit_countries = (co2_limit_countries)
+
+    p = n.model["Link-p"]  # dimension: (time, component)
+
+    # NB: Most country-specific links retain their locational information in bus1 (except for DAC, where it is in bus2, and process emissions, where it is in bus0)
+    country = n.links.bus1.map(n.buses.location).map(n.buses.country)
+    
+    country_DAC = (
+        n.links[n.links.carrier == "DAC"]
+        .bus3.map(n.buses.location)
+        .map(n.buses.country)
+    )
+    country[country_DAC.index] = country_DAC
+    patterns = ["process emissions", "HVC to air", "electrobiofuels","unsustainable bioliquids","biomass-to-methanol","biomass to liquid"]
+
+    for pattern in patterns:
+      source = n.links[n.links.carrier.str.contains(pattern)].bus0.map(n.buses.location).map(n.buses.country)
+      country[source.index] = source
+    mask = country.isna() | (country == '')
+    country[mask] = country[mask].index.str[:2]
+    country = country[country != 'EU']
+    lhs = []
+    for port in [col[3:] for col in n.links if col.startswith("bus")]:
+        if port == str(0):
+            efficiency = (
+                n.links["efficiency"].apply(lambda x: 1.0).rename("efficiency0")
+            )
+        elif port == str(1):
+            efficiency = n.links["efficiency"]
+        else:
+            efficiency = n.links[f"efficiency{port}"]
+        mask = n.links[f"bus{port}"].map(n.buses.carrier).eq("co2")
+
+        idx = n.links[mask].index
+        exclude = ["EU oil refining", "EU methanol import", "EU oil import"]
+        idx = idx[~np.isin(idx, exclude)]
+        #idx = idx[idx.isin(country.index)]
+        # idx = idx[idx != "EU oil refining","EU methanol import","EU oil import"]
+        grouping = country.loc[idx]
+
+        if not grouping.isnull().all():
+            expr = (
+                (p.loc[:, idx] * efficiency[idx])
+                .groupby(grouping, axis=1)
+                .sum()
+                * n.snapshot_weightings.generators
+            ).sum(dims="snapshot")
+            lhs.append(expr)
+
+    lhs = sum(lhs)  # dimension: (country)
+    lhs = lhs.rename({list(lhs.dims)[0]: "snapshot"})
+    rhs = pd.Series(co2_limit_countries)  # dimension: (country)
+    for ct in lhs.indexes["snapshot"]:
+        n.model.add_constraints(
+            lhs.loc[ct] <= rhs[ct],
+            name=f"GlobalConstraint-co2_limit_per_country{ct}",
+        )
+        n.add(
+            "GlobalConstraint",
+            f"co2_limit_per_country{ct}",
+            constant=rhs[ct],
+            sense="<=",
+            type="",
+        )
+
+def add_co2price_country(n, co2_price_countries, nyears=1.0):
+    """
+    Add a CO2 price per country by internalizing emissions into the objective.
+
+    Parameters
+    ----------
+    n : pypsa.Network
+    co2_price_countries : dict
+        CO2 price in €/tCO2 per country (keys must match country codes)
+    nyears : float, optional
+        Scaling factor for snapshot weighting
+    """
+
+    logger.info("Adding CO2 price per country to objective function")
+    p = n.model["Link-p"]  # dimension: (time, component)
+
+    # NB: Most country-specific links retain their locational information in bus1 (except for DAC, where it is in bus2, and process emissions, where it is in bus0)
+    country = n.links.bus1.map(n.buses.location).map(n.buses.country)
+    
+    country_DAC = (
+        n.links[n.links.carrier == "DAC"]
+        .bus3.map(n.buses.location)
+        .map(n.buses.country)
+    )
+    country[country_DAC.index] = country_DAC
+    patterns = ["process emissions", "HVC to air", "electrobiofuels","unsustainable bioliquids","biomass-to-methanol","biomass to liquid"]
+
+    for pattern in patterns:
+      source = n.links[n.links.carrier.str.contains(pattern)].bus0.map(n.buses.location).map(n.buses.country)
+      country[source.index] = source
+    mask = country.isna() | (country == '')
+    country[mask] = country[mask].index.str[:2]
+    country = country[country != 'EU']
+    lhs = []
+    for port in [col[3:] for col in n.links if col.startswith("bus")]:
+        if port == str(0):
+            efficiency = (
+                n.links["efficiency"].apply(lambda x: 1.0).rename("efficiency0")
+            )
+        elif port == str(1):
+            efficiency = n.links["efficiency"]
+        else:
+            efficiency = n.links[f"efficiency{port}"]
+        mask = n.links[f"bus{port}"].map(n.buses.carrier).eq("co2")
+
+        idx = n.links[mask].index
+        exclude = ["EU oil refining", "EU methanol import", "EU oil import"]
+        idx = idx[~np.isin(idx, exclude)]
+        #idx = idx[idx.isin(country.index)]
+        # idx = idx[idx != "EU oil refining","EU methanol import","EU oil import"]
+        grouping = country.loc[idx]
+
+        if not grouping.isnull().all():
+            expr = (
+                (p.loc[:, idx] * efficiency[idx])
+                .groupby(grouping, axis=1)
+                .sum()
+                * n.snapshot_weightings.generators
+            ).sum(dims="snapshot")
+            lhs.append(expr)
+
+    lhs = sum(lhs)  # dimension: (country)
+    dim = list(lhs.dims)[0]
+    price = pd.Series(co2_price_countries)
+    # align with lhs countries
+    price = price.reindex(lhs.indexes[dim]).fillna(0.0)
+    price_da = xr.DataArray(price, dims=[dim])
+    # total CO2 cost
+    co2_cost = (lhs * price_da * nyears).sum(dim=dim)
+    n.model.objective = n.model.objective + co2_cost
+
+    logger.info("CO2 pricing successfully added to objective.")
+
+# def add_additionality_constraint(n):
+#   planning_horizon = int(snakemake.wildcards.planning_horizons)
+#   generator_types = ["solar", "solar rooftop", "offwind-ac", "offwind-dc", "onwind", "offwind-float","solar-hsat"]
+#   if snakemake.config["run"]["name"].startswith(("RFNBO")):
+#      clusters = snakemake.params.scenario["clusters"][0]
+#      sector_opts = snakemake.params.scenario["sector_opts"][0]
+#      baseline_network=pypsa.Network(f"results/baseline/networks/base_s_{clusters}__{sector_opts}_{planning_horizon}.nc")
+#    # Define a simple grouping function
+#   def group(df, b="bus"):
+#             """
+#             Group the given dataframe by bus.
+#             """
+#             return df[b].to_xarray()
+#   def group_links(df, b="bus0"):
+#             """
+#             Group the given links dataframe by bus.
+#             """
+#             return df[b].to_xarray()
+
+#   generator_types = ["solar", "solar rooftop", "offwind-ac", "offwind-dc", "onwind", "offwind-float","solar-hsat"]
+#   gens = n.generators[n.generators.carrier.isin(generator_types)]
+#   generator_groups = gens.bus.to_xarray()
+#   generator_capacities = (
+#       n.model["Generator-p_nom"]
+#       .loc[gens.index]
+#       .groupby(generator_groups)
+#       .sum()
+#   )
+#   print(generator_capacities)
+#   # Calculate total VRE capacities
+#   vre_caps = (generator_capacities)#.sum("snapshot")
+#   print(vre_caps)
+#   #model electrolysers
+#   electrolysers_types = ["H2 Electrolysis"]
+#   electrolysers = n.links[n.links.carrier.isin(electrolysers_types)]
+#   electrolysers_buses = group_links(electrolysers)
+#   efficiency = n.links.efficiency.loc[electrolysers.index]
+#   efficiency_xr = efficiency.to_xarray()
+
+#   electrolyser_capacities = (
+#       (n.model["Link-p_nom"] * efficiency_xr)
+#       .loc[electrolysers.index]
+#       .groupby(electrolysers_buses)
+#       .sum()
+#   )
+#   print(electrolyser_capacities)
+#   electrolyser_caps = (electrolyser_capacities)#.sum("snapshot")
+#   print(electrolyser_caps)
+#   # Get the vre capacities from baseline scenario
+#   gen_mask = baseline_network.generators.carrier.isin(generator_types)
+#   filtered_generators = baseline_network.generators.p_nom_opt.loc[gen_mask]
+#   data_xr = filtered_generators.to_xarray()
+
+#   # Convert bus_info_network to xarray.DataArray
+#   bus_info_network = baseline_network.generators.loc[data_xr.coords["name"].values, "bus"]
+#   bus_info_network_xr = xr.DataArray(bus_info_network, dims="name")
+
+#   # Aggregate constraint data by bus
+#   data_xr_bus = data_xr.groupby(bus_info_network_xr).sum()
+
+#   # Apply the constraint: generation must be ≤ data values
+#   for bus in vre_caps.coords["bus"].values:
+#                 n.model.add_constraints(
+#                     vre_caps.sel(bus=bus) >= data_xr_bus.sel(bus=bus) + electrolyser_caps.sel(bus=bus),
+#                     name=f"Additionality_constraint_limit_{bus}"
+#                 )
+            
+
+#   print("Additionality constraints added.")
+
+
+
 
 def extra_functionality(
     n: pypsa.Network, snapshots: pd.DatetimeIndex, planning_horizons: str | None = None
@@ -1338,6 +1576,7 @@ def extra_functionality(
     add_battery_constraints(n)
     add_lossy_bidirectional_link_constraints(n)
     add_pipe_retrofit_constraint(n)
+    
     if n._multi_invest:
         add_carbon_constraint(n, snapshots)
         add_carbon_budget_constraint(n, snapshots)
@@ -1350,7 +1589,33 @@ def extra_functionality(
 
     if config["sector"]["imports"]["enable"]:
         add_import_limit_constraint(n, snapshots)
-
+    if not rfnbo_scenario:
+     investment_year = int(snakemake.wildcards.planning_horizons[-4:])
+     if n.config["co2_budget_national"]:
+      if investment_year != 2025:
+        # prepare co2 constraint
+        nhours = n.snapshot_weightings.generators.sum()
+        nyears = nhours / 8760
+        limit_countries = snakemake.config["budget_national"][investment_year]
+        # add co2 constraint for each country
+        add_co2limit_country(n, limit_countries, nyears)
+    if rfnbo_scenario:
+        # prepare co2 constraint
+        nhours = n.snapshot_weightings.generators.sum()
+        nyears = nhours / 8760
+        investment_year = int(snakemake.wildcards.planning_horizons[-4:])
+        clusters = snakemake.params.scenario["clusters"][0]
+        sector_opts = snakemake.params.scenario["sector_opts"][0]
+        countries = snakemake.params.countries
+        co2_price_countries = {}
+        for country in countries:
+         if investment_year != 2025:
+            baseline_network=pypsa.Network(f"results/baseline/networks/base_s_{clusters}__{sector_opts}_{investment_year}.nc")
+            co2_price = -baseline_network.global_constraints["mu"].loc[f"co2_limit_per_country{country}"]
+            co2_price_countries[country] = co2_price
+        # add co2 constraint for each country
+        if investment_year != 2025:
+         add_co2price_country(n,co2_price_countries,nyears)
     if n.params.custom_extra_functionality:
         source_path = n.params.custom_extra_functionality
         assert os.path.exists(source_path), f"{source_path} does not exist"
@@ -1359,8 +1624,8 @@ def extra_functionality(
         module = importlib.import_module(module_name)
         custom_extra_functionality = getattr(module, module_name)
         custom_extra_functionality(n, snapshots, snakemake)  # pylint: disable=E0601
-
-
+     
+    
 def check_objective_value(n: pypsa.Network, solving: dict) -> None:
     """
     Check if objective value matches expected value within tolerance.
@@ -1548,7 +1813,7 @@ if __name__ == "__main__":
     cf_solving = snakemake.params.solving["options"]
 
     np.random.seed(solve_opts.get("seed", 123))
-
+    options = snakemake.params.sector
     # Load network
     n = pypsa.Network(snakemake.input.network)
     planning_horizons = snakemake.wildcards.get("planning_horizons", None)
@@ -1566,6 +1831,11 @@ if __name__ == "__main__":
     n = imposed_transmission_limit(
         n,
         config=snakemake.config,)
+    config=snakemake.config
+    rfnbo_scenario = config.get("RFNBO_scenario", False)
+    # if rfnbo_scenario:
+    #   n = add_co2_price_from_baseline(
+    #     n,)
     # Determine solve mode
     rolling_horizon = cf_solving.get("rolling_horizon", False)
     skip_iterations = cf_solving.get("skip_iterations", False)

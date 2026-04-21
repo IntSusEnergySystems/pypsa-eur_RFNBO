@@ -109,6 +109,7 @@ rule solve_sector_network_myopic:
         network=resources(
             "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}_brownfield.nc"
         ),
+        co2_totals_name=resources("co2_totals.csv"),
     output:
         network=RESULTS
         + "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc",
@@ -145,6 +146,9 @@ rule solve_sector_network_myopic:
             "sector", "co2_sequestration_potential", default=200
         ),
         custom_extra_functionality=input_custom_extra_functionality,
+        scenario=config_provider("scenario"),
+        sector=config_provider("sector"),
+        countries=config_provider("countries"),
     message:
         "Solving sector-coupled network with myopic foresight for {wildcards.clusters} clusters, {wildcards.planning_horizons} planning horizons, {wildcards.opts} electric options and {wildcards.sector_opts} sector options"
     script:
