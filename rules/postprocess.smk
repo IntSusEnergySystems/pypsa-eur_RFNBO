@@ -617,3 +617,110 @@ rule plot_interactive_bus_balance:
         ),
     script:
         scripts("plot_interactive_bus_balance.py")
+        
+        
+local_countries = config["countries"].copy()
+if "EU" not in local_countries:
+    local_countries.append("EU") 
+    
+rule prepare_sepia:
+    params:
+        countries=config_provider("countries"),
+        planning_horizons=config_provider("scenario", "planning_horizons"),
+        sector_opts=config_provider("scenario", "sector_opts"),
+        emissions_scope=config_provider("energy", "emissions"),
+        eurostat_report_year=config_provider("energy", "eurostat_report_year"),
+        plotting=config_provider("plotting"),
+        scenario=config_provider("scenario"),
+        study = config_provider("run", "name"),
+        year = config_provider("energy", "energy_totals_year"),
+    input:
+        networks=expand(
+            RESULTS
+            + "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc",
+            **config["scenario"]
+        ),
+        costs = resources("costs_2050_processed.csv"),
+        nodal_capacity_factors=RESULTS + "csvs/nodal_capacity_factors.csv",
+    output:
+        excelfile=expand(RESULTS + "sepia/inputs{country}.xlsx", country=local_countries),
+    threads: 1
+    resources:
+        mem_mb=10000,
+    log:
+        RESULTS + "logs/prepare_sepia.log",
+    benchmark:
+        RESULTS + "benchmarks/prepare_sepia",
+    conda:
+        "../envs/environment.yaml"
+    script:
+        "../SEPIA/excel_generator.py"
+        
+rule generate_sepia:
+    params:
+        countries=config_provider("countries"),
+        year = config_provider("energy", "energy_totals_year"),
+        study = config_provider("run", "name"),
+        planning_horizons=config_provider("scenario", "planning_horizons"),
+        cluster=config_provider("scenario","clusters"),
+    input:
+        countries = "SEPIA/COUNTRIES.xlsx",
+        costs = resources("costs_2050_processed.csv"),
+        sepia_config = "SEPIA/SEPIA_config.xlsx",
+        template = "SEPIA/Template/pypsa.html",
+        biomass_potentials = expand(resources("biomass_potentials_s_{clusters}_{planning_horizons}.csv"),**config["scenario"]),
+        excelfile=expand(RESULTS + "sepia/inputs{country}.xlsx", country=local_countries),
+        plots_html = "config/plots.yaml",
+        
+    output:
+        excelfile=expand(RESULTS + "htmls/ChartData_{country}.xlsx", country=local_countries),
+        htmlfile_emissions=expand(RESULTS + "htmls/{country}_emissions_{study}.html", country=local_countries, study=config["run"]["name"]),
+        htmlfile_sankeys=expand(RESULTS + "htmls/{country}_sankeys_{study}.html", country=local_countries, study=config["run"]["name"]),
+        htmlfile_fec=expand(RESULTS + "htmls/{country}_fec_{study}.html", country=local_countries, study=config["run"]["name"]),
+    threads: 1
+    resources:
+        mem_mb=10000,
+    log:
+        RESULTS + "logs/generate_sepia.log",
+    benchmark:
+        RESULTS + "benchmarks/generate_sepia",
+    conda:
+        "../envs/environment.yaml"
+    script:
+        "../SEPIA/SEPIA.py"
+        
+        
+rule prepare_results:
+    params:
+        countries=config_provider("countries"),
+        planning_horizons=config_provider("scenario", "planning_horizons"),
+        sector_opts=config_provider("scenario", "sector_opts"),
+        plotting=config_provider("plotting"),
+        scenario=config_provider("scenario"),
+        study = config_provider("run", "name"),
+        foresight=config_provider("foresight"),
+    input:
+        networks=expand(
+            RESULTS
+            + "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc",
+            **config["scenario"]
+        ),
+        excelfile=expand(RESULTS + "htmls/ChartData_{country}.xlsx", country=local_countries),
+        costs = resources("costs_2050_processed.csv"),
+        sepia_config = "SEPIA/SEPIA_config.xlsx",
+        template = "SEPIA/Template/pypsa.html",
+        logo = "SEPIA/Template/logo.png",
+        plots_html = "config/plots.yaml",        
+    output:
+        htmlfile=expand(RESULTS + "htmls/{country}_{section}_{study}.html",study = config["run"]["name"], country=local_countries,section=["demands", "costs", "capacities", "dispatch_plots"]),
+    threads: 1
+    resources:
+        mem_mb=10000,
+    log:
+        RESULTS + "logs/prepare_results.log",
+    benchmark:
+        RESULTS + "benchmarks/prepare_results",
+    conda:
+        "../envs/environment.yaml"
+    script:
+        "../SEPIA/Pypsa_results.py"
