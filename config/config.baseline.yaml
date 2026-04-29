@@ -21,7 +21,7 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: "baseline"
+  name: "baseline_smr"
   scenarios:
     enable: false
     file: config/scenarios.yaml
@@ -1384,7 +1384,11 @@ solving:
     co2_budget_nationl: true
     co2_price_national: false
     additionality: false
+    global_additionality: false
     temporal_correlation: false
+    global_temporal_correlation: false
+    temporal_correlation_monthly: false
+    global_temporal_correlation_monthly: false
   solver:
     name: gurobi
     options: "gurobi-default"

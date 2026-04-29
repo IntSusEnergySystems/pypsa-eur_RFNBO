@@ -1820,8 +1820,8 @@ def add_h2_gas_infrastructure(
     n.add("Carrier", "H2")
 
     n.add("Bus", nodes + " H2", location=nodes, carrier="H2", unit="MWh_LHV")
-
-    n.add(
+    if snakemake.config["run"]["name"] != "baseline_smr":
+     n.add(
         "Link",
         nodes + " H2 Electrolysis",
         bus1=nodes + " H2",
@@ -2154,8 +2154,23 @@ def add_h2_gas_infrastructure(
             capital_cost=costs.at["SMR CC", "capital_cost"],
             lifetime=costs.at["SMR CC", "lifetime"],
         )
-
-    if options["SMR"]:
+    if snakemake.config["run"]["name"] == "baseline_smr":
+      if options["SMR"]:
+        n.add(
+            "Link",
+            nodes + " SMR",
+            bus0=spatial.gas.nodes,
+            bus1=nodes + " H2",
+            #bus2="co2 atmosphere",
+            p_nom_extendable=True,
+            carrier="SMR",
+            efficiency=costs.at["SMR", "efficiency"],
+            efficiency2=costs.at["gas", "CO2 intensity"],
+            capital_cost=costs.at["SMR", "capital_cost"],
+            lifetime=costs.at["SMR", "lifetime"],
+        )
+    else:
+      if options["SMR"]:
         n.add(
             "Link",
             nodes + " SMR",
@@ -2168,7 +2183,7 @@ def add_h2_gas_infrastructure(
             efficiency2=costs.at["gas", "CO2 intensity"],
             capital_cost=costs.at["SMR", "capital_cost"],
             lifetime=costs.at["SMR", "lifetime"],
-        )
+        ) 
 
 
 def check_land_transport_shares(shares):
@@ -6545,7 +6560,7 @@ if __name__ == "__main__":
     #     nyears,
     #     limit,
     #  )
-
+    investment_year = int(snakemake.wildcards.planning_horizons[-4:])
     maxext = snakemake.params["lines"]["max_extension"]
     if maxext is not None:
         limit_individual_line_extension(n, maxext)

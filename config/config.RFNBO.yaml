@@ -1238,8 +1238,12 @@ solving:
     SAFE: false
     co2_budget_nationl: false
     co2_price_national: true
-    additionality: true
-    temporal_correlation: true
+    additionality: false
+    global_additionality: true
+    temporal_correlation: false
+    global_temporal_correlation: false
+    temporal_correlation_monthly: false
+    global_temporal_correlation_monthly: true
   solver:
     name: gurobi
     options: "gurobi-default"
