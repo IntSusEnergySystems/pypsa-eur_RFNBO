@@ -21,7 +21,7 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: "baseline_smr"
+  name: "baseline"
   scenarios:
     enable: false
     file: config/scenarios.yaml
@@ -1384,8 +1384,10 @@ solving:
     co2_budget_nationl: true
     co2_price_national: false
     additionality: false
+    interconnected_additionality: false
     global_additionality: false
     temporal_correlation: false
+    interconnected_temporal_correlation: false
     global_temporal_correlation: false
     temporal_correlation_monthly: false
     global_temporal_correlation_monthly: false

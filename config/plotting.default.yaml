@@ -818,6 +818,7 @@ plotting:
     gas boiler: '#ffb07c'
     biomass boiler: '#11875d'
     CHP: '#9a0200'
+    curtailment: '#000000'
     agriculture heat: '#fddc5c'
     low-temperature heat for industry: '#06b1c4'
     centralised electric boiler: '#95d0fc'

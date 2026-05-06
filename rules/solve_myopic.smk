@@ -109,7 +109,10 @@ rule solve_sector_network_myopic:
         network=resources(
             "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}_brownfield.nc"
         ),
-        baseline_network="results/baseline/networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc",
+        baseline_network="results/baseline/networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc"
+        if config["run"]["name"].startswith("RFNBO")
+        else []
+        ,
         co2_totals_name=resources("co2_totals.csv"),
     output:
         network=RESULTS
