@@ -2080,7 +2080,7 @@ def extra_functionality(
     if constraints["global_temporal_correlation_monthly"]:
        if investment_year >= 2035:
         add_global_temporal_correlation_monthly_constraint(n, snapshots)
-    if constraints["RBNFO_demand_share"]:
+    if constraints["RFNBO_demand_share"]:
      if investment_year >= 2030:
         add_RFNBO_demand_share_constraint(n)
     if n.params.custom_extra_functionality:
