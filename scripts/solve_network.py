@@ -1516,12 +1516,7 @@ def add_additionality_constraint(n: pypsa.Network):
         set(config["electricity"]["renewable_carriers"] + ["solar rooftop"])
         - {"hydro"}
     )
-    #loading corresponding baseline network
-    # if snakemake.config["run"]["name"].startswith(("RFNBO")):
-    #     baseline_network = pypsa.Network(snakemake.input.baseline_network)
-    # else:
-    #     logger.error("Baseline network not found for RFNBO scenario.")
-    #     return
+    
     #vre variables
     p_nom_gen = n.model["Generator-p_nom"]
     gens = n.generators[
@@ -1796,11 +1791,6 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
     generator_types = list(
          set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"}
      )
-    # if snakemake.config["run"]["name"].startswith(("RFNBO")):
-    #      baseline_network = pypsa.Network(snakemake.input.baseline_network)
-    # else:
-    #      logger.error("Baseline network not found for RFNBO scenario.")
-    #      return
     
     gens = n.generators[(n.generators.build_year >= target_year) & (n.generators.carrier.isin(generator_types))].index
     p_gen = n.model["Generator-p"].sel(snapshot=sns, name=gens)
@@ -1814,17 +1804,6 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
 
     vre_total = p_gen.groupby(gen_country).sum()
     electrolysers_total = p_electrolysers.groupby(link_country).sum()
-
-    # baseline_gens = baseline_network.generators[
-    #         (baseline_network.generators.build_year >= 2035) & 
-    #         (baseline_network.generators.carrier.isin(generator_types))
-    # ].index
-    
-    # baseline_gen = baseline_network.generators_t.p.loc[sns, baseline_gens]
-    # baseline_grouper = baseline_network.generators.loc[baseline_gens, "bus"].map(baseline_network.buses.country)
-    # rhs = baseline_gen.groupby(baseline_grouper, axis=1).sum()
-    # rhs_xr = rhs.to_xarray()
-    # rhs_xr = rhs_xr.to_array(dim="country")
     #allign countries
     common_countries = list(
     set(vre_total.coords["country"].values) & 
@@ -1843,11 +1822,6 @@ def add_temporal_correlation_interconnected(n: pypsa.Network, sns: pd.DatetimeIn
     Adds interconnected temporal correlation.
     """
     generator_types = list(set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"})
-    # if snakemake.config["run"]["name"].startswith(("RFNBO")):
-    #      baseline_network = pypsa.Network(snakemake.input.baseline_network)
-    # else:
-    #      logger.error("Baseline network not found for RFNBO scenario.")
-    #      return
     neighbours = get_country_neighbours(n)
 
     p_gen = n.model["Generator-p"].sel(snapshot=sns)
@@ -1859,16 +1833,9 @@ def add_temporal_correlation_interconnected(n: pypsa.Network, sns: pd.DatetimeIn
     vre_total = p_gen.sel(name=gens).groupby(n.generators.loc[gens, "bus"].map(n.buses.country)).sum().rename(bus="country")
     elec_total = p_elec.sel(name=electrolysers).groupby(n.links.loc[electrolysers, "bus0"].map(n.buses.country)).sum().rename(bus0="country")
 
-    # base_gens_idx = baseline_network.generators[(baseline_network.generators.build_year >= 2035) & 
-    #                 (baseline_network.generators.carrier.isin(generator_types))].index
-    # rhs = baseline_network.generators_t.p.loc[sns, base_gens_idx].T.groupby(
-    #       baseline_network.generators.loc[base_gens_idx, "bus"].map(baseline_network.buses.country)).sum().T
-    # rhs_xr = rhs.to_xarray().to_array(dim="country")
-
     common_countries = list(
         set(vre_total.data.country.values) & 
         set(elec_total.data.country.values) 
-        # set(rhs_xr.country.values)
     )
 
     lhs_list = []
@@ -1894,25 +1861,11 @@ def add_global_temporal_correlation_constraint(n: pypsa.Network, sns: pd.Datetim
         set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"}
     )
     
-    # if snakemake.config["run"]["name"].startswith(("RFNBO")):
-    #      baseline_network = pypsa.Network(snakemake.input.baseline_network)
-    # else:
-    #      logger.error("Baseline network not found for RFNBO scenario.")
-    #      return
     gens = n.generators[(n.generators.build_year >= target_year) & (n.generators.carrier.isin(generator_types))].index
     p_gen_total = n.model["Generator-p"].sel(snapshot=sns, name=gens).sum("name")
     
     electrolysers = n.links[(n.links.build_year >= target_year) & (n.links.carrier == "H2 Electrolysis")].index
     p_electrolysers_total = n.model["Link-p"].sel(snapshot=sns, name=electrolysers).sum("name")
-
-    # baseline_gens_idx = baseline_network.generators[
-    #     (baseline_network.generators.build_year >= 2035) & 
-    #     (baseline_network.generators.carrier.isin(generator_types))
-    # ].index
-    
-    # rhs_total = baseline_network.generators_t.p.loc[sns, baseline_gens_idx].sum(axis=1)
-    
-    # rhs_xr = xr.DataArray(rhs_total, coords=[sns], dims=["snapshot"])
 
     n.model.add_constraints(
         p_gen_total  >= p_electrolysers_total,
@@ -1929,12 +1882,6 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
     generator_types = list(
         set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"}
     )
-    
-    # if snakemake.config["run"]["name"].startswith(("RFNBO")):
-    #      baseline_network = pypsa.Network(snakemake.input.baseline_network)
-    # else:
-    #      logger.error("Baseline network not found for RFNBO scenario.")
-    #      return
 
     p_gen = n.model["Generator-p"].sel(snapshot=sns)
     p_electrolysers = n.model["Link-p"].sel(snapshot=sns)
@@ -1949,24 +1896,9 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
 
     elec_monthly = p_electrolysers.sel(name=electrolysers).groupby(link_country).sum().groupby("snapshot.month").sum()
 
-    # baseline_gens = baseline_network.generators[
-    #     (baseline_network.generators.build_year >= 2035) & 
-    #     (baseline_network.generators.carrier.isin(generator_types))
-    # ].index
-    
-    # baseline_p = baseline_network.generators_t.p.loc[sns, baseline_gens]
-    # baseline_country = baseline_network.generators.loc[baseline_gens, "bus"].map(baseline_network.buses.country)
-    
-    # rhs = baseline_p.groupby(baseline_country, axis=1).sum()
-    # rhs_monthly = rhs.groupby(rhs.index.month).sum()
-    # rhs_monthly.index.name = "month"
-    # rhs_monthly.columns.name = "country"
-    # rhs_xr = rhs_monthly.to_xarray().to_array(dim="country")
-
     common_countries = list(
         set(vre_monthly.coords["country"].values) & 
         set(elec_monthly.coords["country"].values)
-        # set(rhs_xr.coords["country"].values)
     )
 
     n.model.add_constraints(
@@ -1983,12 +1915,6 @@ def add_global_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd
     generator_types = list(
         set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"}
     )
-    
-    # if snakemake.config["run"]["name"].startswith(("RFNBO")):
-    #      baseline_network = pypsa.Network(snakemake.input.baseline_network)
-    # else:
-    #      logger.error("Baseline network not found for RFNBO scenario.")
-    #      return
 
     gens = n.generators[(n.generators.build_year >= target_year) & (n.generators.carrier.isin(generator_types))].index
     vre_monthly = n.model["Generator-p"].sel(snapshot=sns, name=gens).sum("name").groupby("snapshot.month").sum()
@@ -1996,20 +1922,9 @@ def add_global_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd
     electrolysers = n.links[(n.links.build_year >= target_year) & (n.links.carrier == "H2 Electrolysis")].index
     elec_monthly = n.model["Link-p"].sel(snapshot=sns, name=electrolysers).sum("name").groupby("snapshot.month").sum()
 
-    # baseline_gens_idx = baseline_network.generators[
-    #     (baseline_network.generators.build_year >= 2035) & 
-    #     (baseline_network.generators.carrier.isin(generator_types))
-    # ].index
-    
-    # baseline_p = baseline_network.generators_t.p.loc[sns, baseline_gens_idx].sum(axis=1)
-    # rhs_monthly = baseline_p.groupby(baseline_p.index.month).sum()
-    
-    # rhs_xr = xr.DataArray(rhs_monthly, coords=[rhs_monthly.index], dims=["month"])
-
     n.model.add_constraints(
         vre_monthly >= elec_monthly,
         name="global_temporal_correlation_monthly",
-        # coords={"month": rhs_monthly.index}
     )
     
     logger.info("Global monthly temporal correlation constraint added.")
@@ -2024,7 +1939,7 @@ def add_RFNBO_demand_share_constraint(n: pypsa.Network):
 
     hydrogen_dispatch = n.model["Link-p"]
     total_h2_produced = (hydrogen_dispatch.loc[:, electrolysers] * eff * weights).sum()
-    h2_consuming_carriers = ["methanolisation", "H2 turbine","H2 Fuel Cell"] 
+    h2_consuming_carriers = ["methanolisation", "H2 turbine","H2 Fuel Cell","Sabatier"] 
     consuming_links = n.links[n.links.carrier.isin(h2_consuming_carriers)].index
     h2_link_consumption = ( hydrogen_dispatch.loc[:, consuming_links] * weights).sum()
 

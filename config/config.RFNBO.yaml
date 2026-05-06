@@ -1391,7 +1391,7 @@ solving:
     global_temporal_correlation: false
     temporal_correlation_monthly: false
     global_temporal_correlation_monthly: false
-    RBNFO_demand_share: true
+    RFNBO_demand_share: true
     share:
      2025: 0.2
      2030: 0.3

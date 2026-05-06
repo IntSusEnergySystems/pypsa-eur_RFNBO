@@ -1391,6 +1391,14 @@ solving:
     global_temporal_correlation: false
     temporal_correlation_monthly: false
     global_temporal_correlation_monthly: false
+    RFNBO_demand_share: false
+    share:
+     2025: 0.2
+     2030: 0.3
+     2035: 0.4
+     2040: 0.5
+     2045: 0.6
+     2050: 0.8
   solver:
     name: gurobi
     options: "gurobi-default"
