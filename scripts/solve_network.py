@@ -1730,8 +1730,6 @@ def add_additionality_constraint_interconnected(n: pypsa.Network):
     lhs = linopy.expressions.merge(lhs_list, dim="country")
     lhs.coords["country"] = common_countries
     rhs_xr = xr.DataArray(rhs_final, coords=[common_countries], dims=["country"])
-    print(lhs)
-    print(rhs_xr)
     n.model.add_constraints(
         lhs >= rhs_xr,
         name="additionality_constraint_interconnected"
@@ -1939,20 +1937,17 @@ def add_RFNBO_demand_share_constraint(n: pypsa.Network):
 
     hydrogen_dispatch = n.model["Link-p"]
     total_h2_produced = (hydrogen_dispatch.loc[:, electrolysers] * eff * weights).sum()
-    h2_consuming_carriers = ["methanolisation", "H2 turbine","H2 Fuel Cell","Sabatier"] 
+    h2_consuming_carriers = ["methanolisation", "H2 turbine","H2 Fuel Cell","Sabatier","Fischer-Tropsch"] 
     consuming_links = n.links[n.links.carrier.isin(h2_consuming_carriers)].index
     h2_link_consumption = ( hydrogen_dispatch.loc[:, consuming_links] * weights).sum()
 
-    electrobiofuels_links = n.links[n.links.carrier == "electrobiofuels"].index
-    eff_electrobf = n.links.loc[electrobiofuels_links, "efficiency2"].abs()
-    electrobf_h2_consumption = (hydrogen_dispatch.loc[:, electrobiofuels_links] * eff_electrobf * weights).sum()
     demand_carriers = ["H2 for industry", "shipping hydrogen"]
     hydrogen_loads = n.loads[n.loads.carrier.isin(demand_carriers)].index
 
     static_hydrogen_demand = n.loads.loc[hydrogen_loads, "p_set"].sum() * weights.sum()
     # nonstatic_hydrogen_demand = (n.loads_t.p_set[hydrogen_loads].mul(weights, axis=0)).sum().sum()
 
-    total_hydrogen_demand = static_hydrogen_demand + h2_link_consumption + electrobf_h2_consumption
+    total_hydrogen_demand = static_hydrogen_demand + h2_link_consumption
     level = snakemake.config["solving"]["constraints"]["share"].get(investment_year)
 
     n.model.add_constraints(
