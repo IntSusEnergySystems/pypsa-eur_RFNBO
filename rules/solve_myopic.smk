@@ -114,6 +114,9 @@ rule solve_sector_network_myopic:
         else []
         ,
         co2_totals_name=resources("co2_totals.csv"),
+        costs=lambda w: resources(
+            f"costs_{config_provider('scenario', 'planning_horizons',0)(w)}_processed.csv"
+        ),
     output:
         network=RESULTS
         + "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc",
@@ -153,6 +156,9 @@ rule solve_sector_network_myopic:
         scenario=config_provider("scenario"),
         sector=config_provider("sector"),
         countries=config_provider("countries"),
+        study=config_provider("run", "name"),
+        clusters=config_provider("scenario", "clusters"),
+        sector_opts=config_provider("scenario", "sector_opts"),
     message:
         "Solving sector-coupled network with myopic foresight for {wildcards.clusters} clusters, {wildcards.planning_horizons} planning horizons, {wildcards.opts} electric options and {wildcards.sector_opts} sector options"
     script:

@@ -1381,13 +1381,19 @@ solving:
     EQ: false
     BAU: false
     SAFE: false
-    co2_budget_nationl: true
-    co2_price_national: false
+    co2_budget_nationl: false
+    co2_price_national: true
     additionality: false
-    interconnected_additionality: true
+    additionality_alternate: true
+    activate_vre_share_criterion: true
+    VRE_Share: 90 #%
+    activate_carbon_intensity_criterion: true
+    carbon_intensity: 64.8 #18 gco2/MJ = 64.8 gco2/kwh
+    interconnected_additionality: false
+    interconnected_additionality_alternate: false
     global_additionality: false
-    temporal_correlation: false
-    interconnected_temporal_correlation: true
+    temporal_correlation: true
+    interconnected_temporal_correlation: false
     global_temporal_correlation: false
     temporal_correlation_monthly: false
     global_temporal_correlation_monthly: false
