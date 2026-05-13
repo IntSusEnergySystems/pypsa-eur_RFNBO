@@ -1832,6 +1832,64 @@ def add_h2_gas_infrastructure(
         p_min_pu=options["min_part_load_electrolysis"],
         lifetime=costs.at["electrolysis", "lifetime"],
     )
+    if constraints["flc_constraint"]:
+        #This add a new electrolyser technology for FLC constraint. The constraint make sure that
+        #its only used curtailed VRE energy while the technology is added here only with a different carrier.
+        n.add(
+            "Link",
+            nodes + " FLC Electrolysis",
+            bus1=nodes + " H2",
+            bus0=nodes,
+            p_nom_extendable=True,
+            carrier="FLC Electrolysis",
+            efficiency=costs.at["electrolysis", "efficiency"],
+            capital_cost=costs.at["electrolysis", "capital_cost"],
+            p_min_pu=options["min_part_load_electrolysis"],
+            lifetime=costs.at["electrolysis", "lifetime"],
+        )
+    
+    if constraints["activate_direct_vre_connected_electrolysers"]:
+        #Adding an equivalent of RFNBO direct connection variant. The variant is modelled as a 
+        #hydrogen producing generators each for solar, onwind and offwind technologies. The capital cost
+        #is combination of VRE technology + electrolyser. The hydrogen production ais linked to
+        #VRE generation profiles computed by Atlite while the optimised nominal capacity also considers 
+        # the efficiency of electrolyser.
+        vre_techs = ["solar", "onwind", "offwind-ac", "offwind-dc"]
+        for tech in vre_techs:
+          h2_carrier = tech + " Electrolyser"
+          eff_electrolyser = costs.at["electrolysis", "efficiency"]
+          #making the VRE copied for atlite already generated
+          tech_cols = [c for c in n.generators_t.p_max_pu.columns if tech in c]
+          mapping = {}
+          for c in sorted(tech_cols):
+                    node_id = c.split(" " + tech)[0]
+                    mapping[node_id] = c
+          
+          selected_cols = list(mapping.values())
+          p_max_pu_new = n.generators_t.p_max_pu[selected_cols].copy()
+          p_max_pu_new.columns = [nodes + " " + tech + " H2 Plant" for nodes in mapping.keys()]
+          #Adding profiles which are existing for each node
+          active_nodes = list(mapping.keys())
+          #consider VRE tech + electrolyser cost. Also for dc and ac offshore include connection costs
+          electrolyser_cost = costs.loc["electrolysis", "capital_cost"]
+          costs_list = []
+          for node in active_nodes:
+              node_vre_cost = n.generators.at[mapping[node], "capital_cost"]
+              #capital cost divide by efficiency of electrolusers for proper sizing
+              costs_list.append((node_vre_cost / eff_electrolyser) + electrolyser_cost)
+          n.add(
+                "Generator",
+                 [nodes + " " + tech + " H2 Plant" for nodes in active_nodes],
+                 bus=[(nodes + " H2").replace(" 0 0", " 0") for nodes in active_nodes],
+                 carrier=h2_carrier,
+                 p_nom_extendable=True,
+                 capital_cost=costs_list,
+                 efficiency=eff_electrolyser,
+                 #link production to the VRE weather profile
+                 p_max_pu=p_max_pu_new,
+                 #part-load restriction if applicable
+                 p_min_pu=options["min_part_load_electrolysis"],
+                 lifetime=costs.at["electrolysis", "lifetime"],)
 
     if options["hydrogen_fuel_cell"]:
         logger.info("Adding hydrogen fuel cell for re-electrification.")
@@ -6248,11 +6306,11 @@ if __name__ == "__main__":
     configure_logging(snakemake)  # pylint: disable=E0606
     set_scenario_config(snakemake)
     update_config_from_wildcards(snakemake.config, snakemake.wildcards)
-
+    config = snakemake.config
     options = snakemake.params.sector
     cf_industry = snakemake.params.industry
     ext_carriers = snakemake.params.electricity.get("extendable_carriers", dict())
-
+    constraints = config["solving"].get("constraints", {})
     investment_year = int(snakemake.wildcards.planning_horizons)
 
     n = pypsa.Network(snakemake.input.network)
@@ -6309,7 +6367,7 @@ if __name__ == "__main__":
             )
 
     add_eu_bus(n)
-    config = snakemake.config
+    
     emission_prices = snakemake.params["emission_prices"]
     co2_price = (
         get(emission_prices["co2"], investment_year)

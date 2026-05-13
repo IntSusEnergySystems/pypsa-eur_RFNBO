@@ -845,3 +845,12 @@ plotting:
     CCUS: '#ffbacd'
     load shedding: '#000000'
     EV charger: '#baf238'
+    offwind-ac Electrolyser: '#3b638c'
+    offwind-dc Electrolyser: '#658cbb' 
+    onwind Electrolyser: '#738595'
+    solar Electrolyser: '#ffc512'
+    Electrolysers: '#f0833a'
+    VRE connected Electrolysers: '#2fb537'
+    FLC Electrolysis: '#ffbacd'
+    FLC Electrolysers: '#ffbacd'
+    

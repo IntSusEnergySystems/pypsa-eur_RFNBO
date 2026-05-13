@@ -1586,7 +1586,7 @@ def add_additionality_constraint(n: pypsa.Network):
        #countries not complying with carbon intensity criterion
        intensity_noncompliant = df.index[df["co2_intensity"] > level_intensity]
        #countries failing both criterion
-       eligible_countries = set(vre_noncompliant).intersection(set(intensity_noncompliant))
+       eligible_countries = set(vre_noncompliant).union(set(intensity_noncompliant))
        active_countries = common_countries.intersection(eligible_countries)
        logger.info(
         f"Additionality constraint applied to countries "
@@ -1708,7 +1708,7 @@ def add_additionality_constraint_alternate(n: pypsa.Network):
        active_countries = common_countries.intersection(eligible_countries)
        logger.info(
         f"Additionality constraint applied to countries "
-        f"not complying with either VRE share and carbon intensity criterion: "
+        f"not complying with both VRE share and carbon intensity criterion: "
         f"{', '.join(sorted(active_countries))}"
     )
     elif constraints["activate_vre_share_criterion"]:
@@ -2176,6 +2176,50 @@ def add_RFNBO_demand_share_constraint(n: pypsa.Network):
 
     logger.info("Applying RBNFO hydrogen demand share")
     
+def add_curtailment_electrolyser_constraint(n: pypsa.Network, sns: pd.DatetimeIndex):
+    '''
+    This constraint is applied to check the FLC criterion which specifies that electrolysers are only
+    operated when there is curtailed VRE energy available. For this a new electrolyser technology named 
+    FLC Electrolyser has been added.
+
+    '''
+    #considering only vre carriers
+    generator_types = list(
+        set(config["electricity"]["renewable_carriers"] + ["solar rooftop"])
+        - {"hydro"}
+    )
+    
+    gens = n.generators[
+        (n.generators.p_nom_extendable == True) & 
+        (n.generators.carrier.isin(generator_types))
+    ].index
+    #vre variables
+    p_nom_gen = n.model["Generator-p_nom"].sel(name=gens)
+    p_gen = n.model["Generator-p"].sel(snapshot=sns, name=gens)
+    p_max_pu = n.generators_t.p_max_pu[gens].loc[sns].stack().to_xarray()
+    #vre capacities grouped by country
+    gen_curtailment = (p_nom_gen * p_max_pu) - p_gen
+
+    electrolysers = n.links[
+        (n.links.p_nom_extendable) & 
+        (n.links.carrier == "FLC Electrolysis")
+    ].index
+    p_electrolysers = n.model["Link-p"].sel(snapshot=sns, name=electrolysers)
+    gen_country = n.generators.loc[gens, "bus"].map(n.buses.country).rename("country")
+    link_country = n.links.loc[electrolysers, "bus0"].map(n.buses.country).rename("country")
+    country_curtailment = gen_curtailment.groupby(gen_country).sum()
+    total_elec_input = p_electrolysers.groupby(link_country).sum()
+    active_countries = list(
+        set(country_curtailment.coords["country"].values) & 
+        set(total_elec_input.coords["country"].values)
+    )
+    n.model.add_constraints(
+        total_elec_input.sel(country=active_countries) <= country_curtailment.sel(country=active_countries),
+        name="FLC_curtailment_only",
+        coords={"snapshot": sns, "country": active_countries}
+    )
+    
+    logger.info("FLC Electrolyser constraint added.")
     
 def extra_functionality(
     n: pypsa.Network, snapshots: pd.DatetimeIndex, planning_horizons: str | None = None
@@ -2301,6 +2345,9 @@ def extra_functionality(
     if constraints["RFNBO_demand_share"]:
      if investment_year >= 2030:
         add_RFNBO_demand_share_constraint(n)
+    if constraints["flc_constraint"]:
+     # if investment_year >= 2030:
+         add_curtailment_electrolyser_constraint(n, snapshots)
     if n.params.custom_extra_functionality:
         source_path = n.params.custom_extra_functionality
         assert os.path.exists(source_path), f"{source_path} does not exist"
