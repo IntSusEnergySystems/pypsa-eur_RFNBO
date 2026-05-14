@@ -1453,6 +1453,7 @@ def get_vre_share_carbon_intensity(country):
     co2_intensity.index = co2_intensity.index.droplevel(1)
     #convert t/MWh to g/kWh
     co2_intensity_g_kwh = co2_intensity * 1000
+
     generator_types = list(
       set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]))
 
@@ -1500,6 +1501,8 @@ def get_vre_share_carbon_intensity(country):
     existing_types = [t for t in gas_chp_types if t in co2_intensity_g_kwh.index]
     co2_intensity_g_kwh.loc[existing_types] = co2_intensity_g_kwh.loc["CCGT"]
     emissions = tota_elec_grid_techs * co2_intensity_g_kwh
+    #convert to g/MJ
+    emissions = emissions / 3.6
     total_emissions = emissions.sum()
 
     renewable_carriers = generator_types + [
@@ -2346,7 +2349,7 @@ def extra_functionality(
      if investment_year >= 2030:
         add_RFNBO_demand_share_constraint(n)
     if constraints["flc_constraint"]:
-     # if investment_year >= 2030:
+      if investment_year >= 2030:
          add_curtailment_electrolyser_constraint(n, snapshots)
     if n.params.custom_extra_functionality:
         source_path = n.params.custom_extra_functionality

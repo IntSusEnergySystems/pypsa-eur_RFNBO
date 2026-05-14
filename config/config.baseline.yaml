@@ -1388,7 +1388,7 @@ solving:
     activate_vre_share_criterion: false
     VRE_Share: 90 #%
     activate_carbon_intensity_criterion: false
-    carbon_intensity: 64.8  #18 gco2/MJ = 64.8 gco2/kwh
+    carbon_intensity: 18  #gco2/MJ
     activate_direct_vre_connected_electrolysers: false
     flc_constraint: false
     interconnected_additionality: false
