@@ -21,7 +21,7 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: "RFNBO"
+  name: "RFNBO_CR"
   scenarios:
     enable: false
     file: config/scenarios.yaml
@@ -41,7 +41,7 @@ scenario:
   opts:
   - ""
   sector_opts:
-  - "6H"
+  - "3H"
   planning_horizons:
   - 2025
   - 2030
@@ -1399,7 +1399,7 @@ solving:
     global_temporal_correlation: false
     temporal_correlation_monthly: false
     global_temporal_correlation_monthly: false
-    RFNBO_demand_share: true
+    RFNBO_demand_share: false
     share:
      2025: 0.2
      2030: 0.3

@@ -23,7 +23,7 @@ from scripts._helpers import (
 from scripts.lib.validation.config import validate_config
 
 
-configfile: "config/config.RFNBO.yaml"
+configfile: "config/config.RFNBO_VAR-A1.yaml"
 configfile: "config/plotting.default.yaml"
 
 

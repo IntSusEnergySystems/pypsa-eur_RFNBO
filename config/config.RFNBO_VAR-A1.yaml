@@ -21,7 +21,7 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: "baseline"
+  name: "RFNBO_VAR-A1"
   scenarios:
     enable: false
     file: config/scenarios.yaml
@@ -88,7 +88,7 @@ transmission_limit:
     2040: 1.2
     2045: 1.2
     2050: 1.2
-
+    
 co2_budget_national:
   2030:
     AT: 0.45
@@ -969,19 +969,19 @@ sector:
   shipping_hydrogen_share:
     2020: 0
     2025: 0
-    2030: 0
-    2035: 0
-    2040: 0
-    2045: 0
-    2050: 0
+    2030: 0.01
+    2035: 0.02
+    2040: 0.03
+    2045: 0.04
+    2050: 0.05
   shipping_methanol_share:
     2020: 0
     2025: 0
-    2030: 0.15
-    2035: 0.35
-    2040: 0.55
-    2045: 0.8
-    2050: 1
+    2030: 0.14
+    2035: 0.33
+    2040: 0.52
+    2045: 0.76
+    2050: 0.95
   shipping_oil_share:
     2020: 1
     2025: 1
@@ -1381,20 +1381,20 @@ solving:
     EQ: false
     BAU: false
     SAFE: false
-    co2_budget_nationl: true
-    co2_price_national: false
+    co2_budget_nationl: false
+    co2_price_national: true
     additionality: false
-    additionality_alternate: false
-    activate_vre_share_criterion: false
+    additionality_alternate: true
+    activate_vre_share_criterion: true
     VRE_Share: 90 #%
-    activate_carbon_intensity_criterion: false
-    carbon_intensity: 18  #gco2/MJ
-    activate_direct_vre_connected_electrolysers: false
-    flc_constraint: false
+    activate_carbon_intensity_criterion: true
+    carbon_intensity: 18 #gco2/MJ
+    activate_direct_vre_connected_electrolysers: true
+    flc_constraint: true
     interconnected_additionality: false
     interconnected_additionality_alternate: false
     global_additionality: false
-    temporal_correlation: false
+    temporal_correlation: true
     interconnected_temporal_correlation: false
     global_temporal_correlation: false
     temporal_correlation_monthly: false
@@ -1407,6 +1407,7 @@ solving:
      2040: 0.5
      2045: 0.6
      2050: 0.8
+     
   solver:
     name: gurobi
     options: "gurobi-default"

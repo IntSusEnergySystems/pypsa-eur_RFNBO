@@ -1983,10 +1983,10 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
          set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"}
      )
     
-    gens = n.generators[(n.generators.build_year >= target_year) & (n.generators.carrier.isin(generator_types))].index
+    gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
     p_gen = n.model["Generator-p"].sel(snapshot=sns, name=gens)
     
-    electrolysers = n.links[(n.links.build_year >= target_year) & (n.links.carrier == "H2 Electrolysis")].index
+    electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
     p_electrolysers = n.model["Link-p"].sel(snapshot=sns, name=electrolysers)
 
     #grouping by country
@@ -2032,8 +2032,8 @@ def add_temporal_correlation_interconnected(n: pypsa.Network, sns: pd.DatetimeIn
     p_gen = n.model["Generator-p"].sel(snapshot=sns)
     p_elec = n.model["Link-p"].sel(snapshot=sns)
 
-    gens = n.generators[(n.generators.build_year >= target_year) & (n.generators.carrier.isin(generator_types))].index
-    electrolysers = n.links[(n.links.build_year >= target_year) & (n.links.carrier == "H2 Electrolysis")].index
+    gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
+    electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
 
     vre_total = p_gen.sel(name=gens).groupby(n.generators.loc[gens, "bus"].map(n.buses.country)).sum().rename(bus="country")
     elec_total = p_elec.sel(name=electrolysers).groupby(n.links.loc[electrolysers, "bus0"].map(n.buses.country)).sum().rename(bus0="country")
@@ -2066,10 +2066,10 @@ def add_global_temporal_correlation_constraint(n: pypsa.Network, sns: pd.Datetim
         set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"}
     )
     
-    gens = n.generators[(n.generators.build_year >= target_year) & (n.generators.carrier.isin(generator_types))].index
+    gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
     p_gen_total = n.model["Generator-p"].sel(snapshot=sns, name=gens).sum("name")
     
-    electrolysers = n.links[(n.links.build_year >= target_year) & (n.links.carrier == "H2 Electrolysis")].index
+    electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
     p_electrolysers_total = n.model["Link-p"].sel(snapshot=sns, name=electrolysers).sum("name")
 
     n.model.add_constraints(
@@ -2091,8 +2091,8 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
     p_gen = n.model["Generator-p"].sel(snapshot=sns)
     p_electrolysers = n.model["Link-p"].sel(snapshot=sns)
 
-    gens = n.generators[(n.generators.build_year >= target_year) & (n.generators.carrier.isin(generator_types))].index
-    electrolysers = n.links[(n.links.build_year >= target_year) & (n.links.carrier == "H2 Electrolysis")].index
+    gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
+    electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
 
     gen_country = n.generators.loc[gens, "bus"].map(n.buses.country).rename("country")
     link_country = n.links.loc[electrolysers, "bus0"].map(n.buses.country).rename("country")
@@ -2136,10 +2136,10 @@ def add_global_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd
         set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"}
     )
 
-    gens = n.generators[(n.generators.build_year >= target_year) & (n.generators.carrier.isin(generator_types))].index
+    gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
     vre_monthly = n.model["Generator-p"].sel(snapshot=sns, name=gens).sum("name").groupby("snapshot.month").sum()
 
-    electrolysers = n.links[(n.links.build_year >= target_year) & (n.links.carrier == "H2 Electrolysis")].index
+    electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
     elec_monthly = n.model["Link-p"].sel(snapshot=sns, name=electrolysers).sum("name").groupby("snapshot.month").sum()
 
     n.model.add_constraints(
@@ -2319,7 +2319,7 @@ def extra_functionality(
       if investment_year >= 2030:
         add_additionality_constraint(n)
     if constraints["additionality_alternate"]:
-      if investment_year >= 2030:
+      if investment_year >= target_year:
         add_additionality_constraint_alternate(n)
     if constraints["interconnected_additionality"]:
        if investment_year >= 2035:
@@ -2331,7 +2331,7 @@ def extra_functionality(
       if investment_year >= 2035:
         add_global_additionality_constraint(n)
     if constraints["temporal_correlation"]:
-      if investment_year >= 2030:
+      if investment_year >= target_year:
         add_temporal_correlation_constraint(n, snapshots)
     if constraints["interconnected_temporal_correlation"]:
        if investment_year >= 2035:
@@ -2557,7 +2557,16 @@ if __name__ == "__main__":
     # Load network
     investment_year = int(snakemake.wildcards.planning_horizons[-4:])
     previous_year = investment_year - 5
-    target_year = 2035 if investment_year == 2035 else 2030
+    if config["run"]["name"] == "RFNBO_CR":
+        temporal_year = 2030
+        target_year = 2030
+    elif config["run"]["name"] == "RFNBO_VAR-A2":
+        temporal_year = 2040 if investment_year <= 2040 else 2030
+        target_year = 2040
+    else:
+        temporal_year = 2035 if investment_year <= 2035 else 2030
+        target_year = 2035
+            
     if investment_year >= 2030:
         previous_horizon_data = [get_vre_share_carbon_intensity(country) for country in countries]
     n = pypsa.Network(snakemake.input.network)
