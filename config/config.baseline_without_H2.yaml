@@ -1381,8 +1381,8 @@ solving:
     EQ: false
     BAU: false
     SAFE: false
-    co2_budget_nationl: true
-    co2_price_national: false
+    co2_budget_nationl: false
+    co2_price_national: true
     additionality: false
     activate_vre_share_criterion: false
     VRE_Share: 90 #%
