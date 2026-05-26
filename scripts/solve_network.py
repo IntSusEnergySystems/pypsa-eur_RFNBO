@@ -709,7 +709,7 @@ def remove_hydrogen_demands(n: pypsa.Network):
     fc = -(baseline_network.links_t.p2.filter(like="H2 Fuel Cell"))
 
     dfs = [ft, sb, hb, meth, electr, fc]
-    #combine all technologies column-wise
+    #combine all technologies
     total = pd.concat(dfs, axis=1)
     total.columns = total.columns.str.extract(r'^([A-Z]{2}\d+\s\d+)')[0]
     total_per_node = total.groupby(level=0, axis=1).sum()
@@ -1534,7 +1534,7 @@ def get_vre_share_carbon_intensity(country):
     co2_intensity_g_kwh = co2_intensity * 1000
 
     generator_types = list(
-      set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]))
+      set(config["electricity"]["renewable_carriers"] + ["solar rooftop","ror"]))
 
     conv_types = list(
       set(config["electricity"]["conventional_carriers"] + ["urban central gas CHP",
