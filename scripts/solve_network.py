@@ -1547,6 +1547,11 @@ def get_vre_share_carbon_intensity(country):
     links = n.links.index[
       n.links.carrier.isin(conv_types)
     ]
+    
+    hydro= n.storage_units.index[
+      n.storage_units.carrier == "hydro"
+    ]
+    
     gen = (
       (n.snapshot_weightings.generators @ n.generators_t.p[gens])
       .filter(like=country)
@@ -1569,7 +1574,18 @@ def get_vre_share_carbon_intensity(country):
     .sum()
     .mul(1e3)   #convert MWh to kWh
     )
-    tota_elec_grid_techs = pd.concat([gen, link])
+    hyd = (
+      (n.snapshot_weightings.generators @ n.storage_units_t.p_dispatch[hydro])
+      .filter(like=country)
+      .groupby(
+        [
+            n.storage_units.loc[hydro, "carrier"],
+        ]
+     )
+    .sum()
+    .mul(1e3)   #convert MWh to kWh
+     )
+    tota_elec_grid_techs = pd.concat([gen, link, hyd])
     #align with grid carriers
     co2_intensity_g_kwh = co2_intensity_g_kwh.reindex(tota_elec_grid_techs.index).fillna(0)
     gas_chp_types = [
