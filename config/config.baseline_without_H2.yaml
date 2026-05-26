@@ -21,7 +21,7 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: "baseline"
+  name: "baseline_without_H2"
   scenarios:
     enable: false
     file: config/scenarios.yaml
@@ -1028,7 +1028,7 @@ sector:
     micro_chp: false
   solar_thermal: true
   solar_cf_correction: 0.788457
-  methanation: true
+  methanation: false
   coal_cc: false
   dac: true
   co2_vent: false
@@ -1038,10 +1038,10 @@ sector:
     rural: true
   marginal_cost_heat_vent: 0.02
   allam_cycle_gas: false
-  hydrogen_fuel_cell: true
-  hydrogen_turbine: true
-  SMR: true
-  SMR_cc: true
+  hydrogen_fuel_cell: false
+  hydrogen_turbine: false
+  SMR: false
+  SMR_cc: false
   regional_oil_demand: true
   regional_coal_demand: true
   regional_co2_sequestration_potential:
@@ -1117,9 +1117,9 @@ sector:
       compression_per_1000km: 0.01
     electricity distribution grid:
       efficiency_static: 0.97
-  H2_network: true
+  H2_network: false
   gas_network: true
-  H2_retrofit: true
+  H2_retrofit: false
   H2_retrofit_capacity_per_CH4: 0.6
   gas_network_connectivity_upgrade: 1
   gas_distribution_grid: true
@@ -1332,7 +1332,7 @@ solving:
     clip_p_max_pu: 0.01
     load_shedding:
       enable: false
-      default_cost: 100000
+      default_cost: 10000
       all_carriers: true
       carriers: {}
     load_sinks:

@@ -110,6 +110,10 @@ rule solve_sector_network_myopic:
             "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}_brownfield.nc"
         ),
         baseline_network="results/baseline/networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc"
+        if config["run"]["name"] != "baseline"
+        else []
+        ,
+        baseline_updated="results/baseline_without_H2/networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc"
         if config["run"]["name"].startswith("RFNBO")
         else []
         ,

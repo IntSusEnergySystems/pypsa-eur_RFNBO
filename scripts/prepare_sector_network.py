@@ -1820,6 +1820,7 @@ def add_h2_gas_infrastructure(
     n.add("Carrier", "H2")
 
     n.add("Bus", nodes + " H2", location=nodes, carrier="H2", unit="MWh_LHV")
+    
     n.add(
         "Link",
         nodes + " H2 Electrolysis",
@@ -1832,21 +1833,6 @@ def add_h2_gas_infrastructure(
         p_min_pu=options["min_part_load_electrolysis"],
         lifetime=costs.at["electrolysis", "lifetime"],
     )
-    if constraints["flc_constraint"]:
-        #This add a new electrolyser technology for FLC constraint. The constraint make sure that
-        #its only used curtailed VRE energy while the technology is added here only with a different carrier.
-        n.add(
-            "Link",
-            nodes + " FLC Electrolysis",
-            bus1=nodes + " H2",
-            bus0=nodes,
-            p_nom_extendable=True,
-            carrier="FLC Electrolysis",
-            efficiency=costs.at["electrolysis", "efficiency"],
-            capital_cost=costs.at["electrolysis", "capital_cost"],
-            p_min_pu=options["min_part_load_electrolysis"],
-            lifetime=costs.at["electrolysis", "lifetime"],
-        )
     
     if constraints["activate_direct_vre_connected_electrolysers"]:
         #Adding an equivalent of RFNBO direct connection variant. The variant is modelled as a 
@@ -1855,8 +1841,10 @@ def add_h2_gas_infrastructure(
         #VRE generation profiles computed by Atlite while the optimised nominal capacity also considers 
         # the efficiency of electrolyser.
         vre_techs = ["solar", "onwind", "offwind-ac", "offwind-dc"]
+        oversize_factor = config["solving"]["constraints"]["oversize_factor"]
         for tech in vre_techs:
           h2_carrier = tech + " Electrolyser"
+          tech_oversize = oversize_factor[tech]
           eff_electrolyser = costs.at["electrolysis", "efficiency"]
           #making the VRE copied for atlite already generated
           tech_cols = [c for c in n.generators_t.p_max_pu.columns if tech in c]
@@ -1876,7 +1864,7 @@ def add_h2_gas_infrastructure(
           for node in active_nodes:
               node_vre_cost = n.generators.at[mapping[node], "capital_cost"]
               #capital cost divide by efficiency of electrolusers for proper sizing
-              costs_list.append((node_vre_cost / eff_electrolyser) + electrolyser_cost)
+              costs_list.append((node_vre_cost * tech_oversize) + electrolyser_cost)
           n.add(
                 "Generator",
                  [nodes + " " + tech + " H2 Plant" for nodes in active_nodes],
@@ -2193,8 +2181,8 @@ def add_h2_gas_infrastructure(
             * costs.at["biomass CHP capture", "capture_rate"],
             lifetime=costs.at["coal", "lifetime"],
         )
-
-    if options["SMR_cc"]:
+    if investment_year > 2025:
+     if options["SMR_cc"]:
         n.add(
             "Link",
             spatial.nodes,
