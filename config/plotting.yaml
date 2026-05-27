@@ -215,7 +215,7 @@ plotting:
       branch_sizes:
   balance_map_interactive:
     bus_carriers:
-    - ACsnakemake -s Snakefile_baseline_without_H2 -call all
+    - AC
     - gas
     - oil
     - urban_central_heat

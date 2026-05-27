@@ -1159,7 +1159,7 @@ sector:
     var_cf: true
     sustainability_factor: 0.0025
   solid_biomass_import:
-    enable: true
+    enable: false
     price: 54
     max_amount: 1390
     upstream_emissions_factor: 0.1

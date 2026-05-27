@@ -664,7 +664,8 @@ def remove_hydrogen_demands(n: pypsa.Network):
         "industry methanol",
         "methanolisation",
         "Fischer-Tropsch",
-        "shipping methanol"
+        "shipping methanol",
+        "SMR",
     ]
     removed_links = n.links.index[
         n.links.carrier.isin(links_to_remove)
@@ -675,7 +676,7 @@ def remove_hydrogen_demands(n: pypsa.Network):
         "NH3",
         "methanol",
         "industry methanol",
-        "shipping methanol"
+        "shipping methanol",
     ]
     removed_buses = n.buses.index[
         n.buses.carrier.isin(buses_to_remove)
@@ -684,7 +685,7 @@ def remove_hydrogen_demands(n: pypsa.Network):
     stores_to_remove = [
         "H2 Store",
         "ammonia store",
-        "methanol"
+        "methanol",
     ]
     removed_stores = n.stores.index[
         n.stores.carrier.isin(stores_to_remove)
@@ -700,6 +701,13 @@ def remove_hydrogen_demands(n: pypsa.Network):
     per_without_efuels = 1-ft_percentage
     cols = n.loads.p_set.filter(like="kerosene for aviation").index
     n.loads.loc[cols, "p_set"] *= per_without_efuels
+    #removing efuels produced by methanation from gas for industry demands
+    methanation = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p1.filter(like="Sabatier")).sum().sum()/1e6
+    gas_ind = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="gas for industry")).sum().sum()/1e6
+    meth_percentage = (methanation / gas_ind)
+    gas_without_efuels = 1-meth_percentage
+    cols_gas = n.loads.p_set.filter(like="gas for industry").index
+    n.loads.loc[cols_gas, "p_set"] *= gas_without_efuels
     #removing waste heat produced by H2/molecule technlogies from DH demand
     ft = -(baseline_network.links_t.p3.filter(like="Fischer-Tropsch"))
     sb = -(baseline_network.links_t.p3.filter(like="Sabatier"))
@@ -2431,6 +2439,7 @@ if __name__ == "__main__":
         n,
         config=snakemake.config,)
     if config["run"]["name"] == "baseline_without_H2":
+     if investment_year != 2025:
       n = remove_hydrogen_demands(n,)
     # Determine solve mode
     rolling_horizon = cf_solving.get("rolling_horizon", False)

@@ -41,7 +41,7 @@ scenario:
   opts:
   - ""
   sector_opts:
-  - "6H"
+  - "3H"
   planning_horizons:
   - 2025
   - 2030
@@ -1431,7 +1431,7 @@ solving:
       dual_feasibility_tolerance: 1.0e-05
       random_seed: 123
     "gurobi-default":
-      threads: 8
+      threads: 4
       method: 2
       crossover: 0
       BarConvTol: 1.0e-05

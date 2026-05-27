@@ -41,7 +41,7 @@ scenario:
   opts:
   - ""
   sector_opts:
-  - "6H"
+  - "3H"
   planning_horizons:
   - 2025
   - 2030
@@ -1040,7 +1040,7 @@ sector:
   allam_cycle_gas: false
   hydrogen_fuel_cell: false
   hydrogen_turbine: false
-  SMR: false
+  SMR: true
   SMR_cc: false
   regional_oil_demand: true
   regional_coal_demand: true
