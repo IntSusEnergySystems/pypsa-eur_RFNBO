@@ -313,11 +313,9 @@ def prepare_sepia(countries):
     tot_emm = flows_co2.loc[:, tot_emm]
     tot_emm = tot_emm.groupby(level='Target', axis=1).sum() 
     for en_code in ['net']:
-        # bm_cap = flows_co2[('atm', 'bec' + '_ghg', '')].squeeze().rename_axis(None)
         blg_cap = flows_co2[('atm', 'blg' + '_ghg', '')].squeeze().rename_axis(None)
         blg_cap_cc = flows_co2[('atm', 'blg' + '_ghg', 'cc')].squeeze().rename_axis(None)
         dac_cap = flows_co2[('atm', 'stm', '')].squeeze().rename_axis(None)
-        # bm_cap = bm_cap.sum(axis=1)
         values_atm = tot_emm['atm'] - tot_emm['bm_ghg'] - dac_cap - blg_cap - blg_cap_cc
         flows_co2[('atm',en_code + '_ghg',  'net')] = values_atm
         
