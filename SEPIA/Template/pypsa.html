@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Data Viewer</title>
+    <link rel="stylesheet" href="https://clever-energy-scenario.eu/wp-content/themes/twentytwenty/style.css">
+    <link rel="stylesheet" href="https://clever-energy-scenario.eu/wp-content/themes/clever/style.css">
+    <script src="https://cdn.plot.ly/plotly-2.16.1.min.js"></script>
+    <style>
+        /* SEPIA style changes */
+        #navsticky .menu-item { display: inline-block !important }
+        #menu-item-59 img { display: inline-block }
+        .site-main { padding:0 5%; }
+        #navsticky li { top: -15px; }
+        #navsticky #menu-dropdown { top: 10px; }
+        #navsticky .menu-item-70 A { background:none; }
+        #navsticky .menu-item-70 { margin-left:0; }
+        #navsticky {
+          background-color: #d2e9e0; /* light teal */
+        }
+        #navsticky #menu-item-70 > a {
+            color: black;
+            text-decoration: none;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            padding-left: 0; 
+            margin-left: -5px;
+        }
+        #navsticky #return-arrow{
+            font-size: 30px;
+            padding-right: 3px;
+            color: black;
+        }
+        .toc { 
+            list-style: none; 
+            padding: 0; 
+            margin: 0;
+            display: inline-block;
+        }
+        .toc li { 
+            padding: 4px 8px;
+            cursor: pointer; 
+            margin: 1px 0;
+            text-decoration: underline; /* Ensure no underline by default */
+            font-size: 25px;
+        }
+        ol, ul {
+            margin: 0;
+            padding: 0;
+        }
+        .toc li:hover { 
+            text-decoration: underline; /* Add underline on hover */
+            background: none; /* Remove background on hover */
+        }
+        .encart {
+            margin-bottom: 50px; /* Remove any bottom margin */
+        }
+        #scenario-switch {
+            margin-top: 10px; /* Reduce the top margin */
+            margin-bottom: 20px; 
+            font-weight: bold;
+            text-align: left;
+            /* Explicitly hide the switch */
+            display: none;
+            font-size: 30px;
+            color: black;
+        }
+        #scenario-switch a {
+            text-decoration: underline;
+            color: blue;
+            font-size: 30px;
+        }
+        #scenario-switch a:hover {
+            text-decoration: underline;
+        }
+        .encart {
+           background: none !important;
+        }
+        .secondary-toc {
+           margin-left: 30px; /* Moves it slightly to the right */
+        }
+        .secondary-toc li {
+           font-size: 18px !important; /* Ensures same font size as primary TOC */
+           padding: 1px 8px;
+           cursor: pointer;
+           text-decoration: underline;
+           list-style: none !important;
+           margin: 0;
+        }
+        .secondary-toc li:hover {
+          text-decoration: underline;
+          background: none;
+        }
+        .main-title {
+          color: #008080; /* teal blue */
+        }
+    </style>
+    <script>
+    const CATEGORIES = ["demands", "emissions", "costs", "capacities", "fec", "sankeys", "maps", "dispatch_plots"];
+
+    // 1. Get the current state from URL or LocalStorage
+    function getCurrentState() {
+        const params = new URLSearchParams(window.location.search);
+        
+        // Priority: 1. URL Parameters, 2. LocalStorage, 3. Defaults
+        const country = params.get("c") || localStorage.getItem("selectedCountry") || "EU";
+        const scenario = params.get("s") || localStorage.getItem("selectedScenario") || "baseline";
+        
+        return { country, scenario };
+    }
+
+    // 2. Build filename with state preserved in URL parameters
+    function buildFileName(country, category, scenario) {
+        // Base filename: EU_demands_baseline.html
+        // We add ?c=...&s=... to force the next page to recognize the state
+        return `${country}_${category}_${scenario}.html?c=${country}&s=${scenario}`;
+    }
+
+    // 3. Triggered when dropdowns change
+    function updateSelection() {
+        const country = document.getElementById("country-select").value;
+        const scenario = document.getElementById("scenario-select").value;
+        
+        localStorage.setItem("selectedCountry", country);
+        localStorage.setItem("selectedScenario", scenario);
+        
+        // Determine current category from the filename
+        const currentPath = window.location.pathname.split("/").pop();
+        let currentCat = "demands"; 
+
+        for (const cat of CATEGORIES) {
+            // Match exactly _category_ (e.g. _costs_) to avoid partial matches
+            if (currentPath.includes(`_${cat}_`)) {
+                currentCat = cat;
+                break;
+            }
+        }
+
+        window.location.href = buildFileName(country, currentCat, scenario);
+    }
+
+    function updateTableOfContents() {
+        const state = getCurrentState();
+        const tocList = document.getElementById("toc-list");
+        const currentPath = window.location.pathname.split("/").pop();
+
+        tocList.innerHTML = "";
+        
+        CATEGORIES.forEach(cat => {
+            const listItem = document.createElement("li");
+            const fileName = buildFileName(state.country, cat, state.scenario);
+
+            listItem.textContent = formatTitle(cat);
+            
+            // Navigate using the built filename which includes state params
+            listItem.onclick = (e) => {
+                e.preventDefault();
+                window.location.href = fileName;
+            };
+            
+            // Strict Active Check
+            if (currentPath.includes(`_${cat}_`)) {
+                listItem.classList.add("active");
+                const secondaryContainer = document.createElement("div");
+                secondaryContainer.classList.add("secondary-toc");
+                secondaryContainer.innerHTML = "{{TABLE_OF_CONTENTS}}"; 
+                tocList.appendChild(listItem);
+                tocList.appendChild(secondaryContainer);
+            } else {
+                tocList.appendChild(listItem);
+            }
+        });
+    }
+
+    function formatTitle(cat) {
+        const titleMap = {
+            "demands": "Demands", "emissions": "Emissions", "costs": "Costs",
+            "capacities": "Capacities", "fec": "Energy Consumption",
+            "sankeys": "Sankeys", "maps": "Maps", "dispatch_plots": "Dispatch"
+        };
+        return titleMap[cat] || cat;
+    }
+
+    // Initial Load
+    window.addEventListener('DOMContentLoaded', () => {
+        const state = getCurrentState();
+        
+        // Force dropdowns to reflect the state
+        document.getElementById("country-select").value = state.country;
+        document.getElementById("scenario-select").value = state.scenario;
+        
+        // Ensure storage is in sync with URL
+        localStorage.setItem("selectedCountry", state.country);
+        localStorage.setItem("selectedScenario", state.scenario);
+        
+        updateTableOfContents();
+    });
+    </script>
+</head>
+<body>
+
+    <div id="navsticky">
+        <div class="nav-group">
+            <span class="nav-label">Select Country:</span>
+            <select id="country-select" onchange="updateSelection()">
+                <option value="AT">Austria</option>
+				<option value="BE">Belgium</option>
+				<option value="BG">Bulgaria</option>
+				<option value="CH">Switzerland</option>
+				<option value="CZ">Czechia</option>
+				<option value="DE">Germany</option>
+				<option value="DK">Denmark</option>
+				<option value="EE">Estonia</option>
+				<option value="ES">Spain</option>
+				<option value="FI">Finland</option>
+				<option value="FR">France</option>
+				<option value="GB">Great Britain</option>
+				<option value="GR">Greece</option>
+				<option value="HR">Crotia</option>
+				<option value="HU">Hungary</option>
+				<option value="IE">Ireland</option>
+				<option value="IT">Italy</option>
+				<option value="LT">Lithuania</option>
+				<option value="LU">Luxembourg</option>
+				<option value="LV">Latvia</option>
+				<option value="NL">Netherlands</option>
+				<option value="NO">Norway</option>
+				<option value="PL">Poland</option>
+				<option value="PT">Portugal</option>
+				<option value="SE">Sweden</option>
+				<option value="SI">Slovenia</option>
+				<option value="SK">Slovakia</option>
+				<option value="RO">Romania</option>
+                <option value="EU">28 countries</option>
+            </select>
+        </div>
+
+        <div class="nav-group">
+            <span class="nav-label">Select Scenario:</span>
+            <select id="scenario-select" onchange="updateSelection()">
+                <option value="baseline">Baseline</option>
+                <option value="RFNBO">RFNBO</option>
+            </select>
+        </div>
+    </div>
+
+    <main id="main" class="site-main main_large">
+        <div class="encart">
+            <h2>Navigation</h2>
+            <ul id="toc-list" class="toc"></ul>
+        </div>
+
+        <hr>
+
+        <div id="content">
+            {{MAIN}}
+        </div>
+    </main>
+
+</body>
+</html>
