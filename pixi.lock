@@ -441,7 +441,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pillow-12.1.1-py313h80991f8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pixman-0.46.4-h54a6638_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.9.4-pyhcf101f3_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-6.6.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-5.24.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pluggy-1.6.0-pyhf9edf01_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/polars-1.38.1-pyh6a1acc5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/polars-runtime-32-1.38.1-py310hffdcd12_0.conda
@@ -1063,7 +1063,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pillow-12.1.1-py313h16bb925_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pixman-0.46.4-ha059160_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.9.4-pyhcf101f3_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-6.6.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-5.24.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pluggy-1.6.0-pyhf9edf01_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/polars-1.38.1-pyh6a1acc5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/polars-runtime-32-1.38.1-py310had17480_0.conda
@@ -1658,7 +1658,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pillow-12.1.1-py313h45e5a15_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pixman-0.46.4-h81086ad_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.9.4-pyhcf101f3_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-6.6.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-5.24.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pluggy-1.6.0-pyhf9edf01_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/polars-1.38.1-pyh6a1acc5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/polars-runtime-32-1.38.1-py310haaaf75b_0.conda
@@ -2235,7 +2235,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/pillow-12.1.1-py313h38f99e1_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pixman-0.46.4-h5112557_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.9.4-pyhcf101f3_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-6.6.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-5.24.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pluggy-1.6.0-pyhf9edf01_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/polars-1.38.1-pyh6a1acc5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/polars-runtime-32-1.38.1-py310hca7251b_0.conda
@@ -4388,7 +4388,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pillow-12.1.1-py313h80991f8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pixman-0.46.4-h54a6638_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.9.4-pyhcf101f3_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-6.6.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-5.24.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pluggy-1.6.0-pyhf9edf01_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/polars-1.38.1-pyh6a1acc5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/polars-runtime-32-1.38.1-py310hffdcd12_0.conda
@@ -5010,7 +5010,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pillow-12.1.1-py313h16bb925_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pixman-0.46.4-ha059160_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.9.4-pyhcf101f3_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-6.6.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-5.24.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pluggy-1.6.0-pyhf9edf01_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/polars-1.38.1-pyh6a1acc5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/polars-runtime-32-1.38.1-py310had17480_0.conda
@@ -5605,7 +5605,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pillow-12.1.1-py313h45e5a15_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pixman-0.46.4-h81086ad_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.9.4-pyhcf101f3_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-6.6.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-5.24.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pluggy-1.6.0-pyhf9edf01_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/polars-1.38.1-pyh6a1acc5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/polars-runtime-32-1.38.1-py310haaaf75b_0.conda
@@ -6182,7 +6182,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/pillow-12.1.1-py313h38f99e1_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pixman-0.46.4-h5112557_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.9.4-pyhcf101f3_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-6.6.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-5.24.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pluggy-1.6.0-pyhf9edf01_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/polars-1.38.1-pyh6a1acc5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/polars-runtime-32-1.38.1-py310hca7251b_0.conda
@@ -25677,6 +25677,19 @@ packages:
   license_family: MIT
   size: 25646
   timestamp: 1773199142345
+- conda: https://conda.anaconda.org/conda-forge/noarch/plotly-5.24.1-pyhd8ed1ab_1.conda
+  sha256: d1bbf2d80105bfc8a7ed9817888f4a1686ed393d6435572921add09cc9347c1c
+  md5: 71ac632876630091c81c50a05ec5e030
+  depends:
+  - packaging
+  - python >=3.9
+  - tenacity >=6.2.0
+  constrains:
+  - ipywidgets >=7.6
+  license: MIT
+  license_family: MIT
+  size: 8022748
+  timestamp: 1733733328161
 - conda: https://conda.anaconda.org/conda-forge/noarch/plotly-6.6.0-pyhd8ed1ab_0.conda
   sha256: c418d325359fc7a0074cea7f081ef1bce26e114d2da8a0154c5d27ecc87a08e7
   md5: 3e9427ee186846052e81fadde8ebe96a
