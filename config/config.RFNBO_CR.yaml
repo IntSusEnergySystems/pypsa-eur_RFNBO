@@ -41,7 +41,7 @@ scenario:
   opts:
   - ""
   sector_opts:
-  - "6H"
+  - "3H"
   planning_horizons:
   - 2025
   - 2030
@@ -339,6 +339,8 @@ electricity:
     - OCGT
     - CCGT
     - nuclear
+    - geothermal
+    - biomass
     StorageUnit: []
     Store:
     - battery
@@ -937,27 +939,27 @@ sector:
   land_transport_fuel_cell_share:
     2020: 0
     2025: 0
-    2030: 0
-    2035: 0
-    2040: 0
-    2045: 0
-    2050: 0
+    2030: 0.01
+    2035: 0.02
+    2040: 0.07
+    2045: 0.11
+    2050: 0.16
   land_transport_electric_share:
     2020: 0
-    2025: 0.05
-    2030: 0.2
-    2035: 0.45
-    2040: 0.7
-    2045: 0.85
-    2050: 1
+    2025: 0.03
+    2030: 0.08
+    2035: 0.22
+    2040: 0.39
+    2045: 0.57
+    2050: 0.74
   land_transport_ice_share:
     2020: 1
-    2025: 0.95
-    2030: 0.8
-    2035: 0.55
-    2040: 0.3
-    2045: 0.15
-    2050: 0
+    2025: 0.97
+    2030: 0.91
+    2035: 0.76
+    2040: 0.54
+    2045: 0.32
+    2050: 0.1
   transport_electric_efficiency: 53.19
   transport_fuel_cell_efficiency: 30.003
   transport_ice_efficiency: 16.0712
@@ -968,28 +970,28 @@ sector:
   shipping_hydrogen_liquefaction: false
   shipping_hydrogen_share:
     2020: 0
-    2025: 0
-    2030: 0.01
-    2035: 0.02
-    2040: 0.03
-    2045: 0.04
-    2050: 0.05
+    2025: 0.02
+    2030: 0.04
+    2035: 0.07
+    2040: 0.11
+    2045: 0.15
+    2050: 0.19
   shipping_methanol_share:
     2020: 0
-    2025: 0
-    2030: 0.14
-    2035: 0.33
-    2040: 0.52
-    2045: 0.76
-    2050: 0.95
+    2025: 0.03
+    2030: 0.07
+    2035: 0.16
+    2040: 0.26
+    2045: 0.37
+    2050: 0.47
   shipping_oil_share:
     2020: 1
-    2025: 1
-    2030: 0.85
-    2035: 0.65
-    2040: 0.45
-    2045: 0.2
-    2050: 0
+    2025: 0.96
+    2030: 0.89
+    2035: 0.77
+    2040: 0.63
+    2045: 0.48
+    2050: 0.34
   shipping_methanol_efficiency: 0.46
   shipping_oil_efficiency: 0.4
   aviation_demand_factor: 1.0
@@ -1152,11 +1154,11 @@ sector:
       "offwind-ac": 3
       "offwind-dc": 3
   enhanced_geothermal:
-    enable: false
-    flexible: true
+    enable: true
+    flexible: false
     max_hours: 240
     max_boost: 0.25
-    var_cf: true
+    var_cf: false
     sustainability_factor: 0.0025
   solid_biomass_import:
     enable: false
@@ -1178,20 +1180,20 @@ sector:
 industry:
   St_primary_fraction:
     2020: 0.6
-    2025: 0.55
-    2030: 0.5
-    2035: 0.45
-    2040: 0.4
-    2045: 0.35
-    2050: 0.3
+    2025: 0.74
+    2030: 0.71
+    2035: 0.67
+    2040: 0.64
+    2045: 0.58
+    2050: 0.57
   DRI_fraction:
     2020: 0
     2025: 0
-    2030: 0.05
-    2035: 0.2
-    2040: 0.4
-    2045: 0.7
-    2050: 1
+    2030: 0.06
+    2035: 0.20
+    2040: 0.39
+    2045: 0.55
+    2050: 0.55
   H2_DRI: 1.7
   elec_DRI: 0.322
   Al_primary_fraction:
@@ -1399,7 +1401,7 @@ solving:
     temporal_correlation: true
     interconnected_temporal_correlation: false
     global_temporal_correlation: false
-    temporal_correlation_monthly: false
+    temporal_correlation_monthly: true
     global_temporal_correlation_monthly: false
     RFNBO_demand_share: false
     share:
