@@ -6107,7 +6107,6 @@ def add_enhanced_geothermal(
         p_nom_max = bus_egs["p_nom_max"]
         capital_cost = bus_egs["capital_cost"]
         bus1 = pd.Series(f"{bus} geothermal heat surface", well_name)
-
         # adding geothermal wells as multiple generators to represent supply curve
         n.add(
             "Link",
@@ -6118,7 +6117,7 @@ def add_enhanced_geothermal(
             p_nom_extendable=True,
             p_nom_max=p_nom_max.set_axis(well_name) / efficiency_orc,
             capital_cost=capital_cost.set_axis(well_name) * efficiency_orc,
-            efficiency=bus_eta.loc[n.snapshots],
+            efficiency=bus_eta,
             lifetime=costs.at["geothermal", "lifetime"],
         )
 
