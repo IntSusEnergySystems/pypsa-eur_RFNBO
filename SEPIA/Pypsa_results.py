@@ -117,6 +117,28 @@ def load_files(study, planning_horizons, cluster, opt, sector_opt):
         files[planning_horizon] = load_file(filename)
     return files
 
+#uploading baseline network files to retrieve co2 prices for co2 price plot as they are computed in baseline as shadow
+#price and then implemented in other RFNBO scenarios as costs
+def build_filename_baseline(cluster,opt,sector_opt,planning_horizon):
+    prefix="results/baseline/networks/base_"
+    return prefix+f"s_{cluster}_{opt}_{sector_opt}_{planning_horizon}.nc".format(
+        cluster=cluster,
+        opt=opt,
+        sector_opt=sector_opt,
+        planning_horizon=planning_horizon
+    )
+
+def load_file_baseline(filename_baseline):
+    # Use pypsa.Network to load the network from the filename
+    return pypsa.Network(filename_baseline)
+
+def load_files_baseline(study, planning_horizons, cluster, opt, sector_opt):
+    files_baseline = {}
+    for planning_horizon in planning_horizons:
+        filename_baseline = build_filename_baseline(cluster, opt, sector_opt, planning_horizon)
+        files_baseline[planning_horizon] = load_file_baseline(filename_baseline)
+    return files_baseline
+
 
 def calculate_ac_transmission(lines, line_numbers):
     transmission_ac = lines.s_nom_opt[line_numbers].sum()
@@ -711,6 +733,53 @@ def operational_costs(countries):
          print(f"CSV file for {country} saved at: {file_path}")
     return operational_costs
 
+def co2_price(countries):
+
+    for country in countries:
+        co2_values = []
+
+        for planning_horizon in planning_horizons:
+            if planning_horizon == 2025:
+             co2_values.append(0)
+             continue
+            n = loaded_files_baseline[planning_horizon]
+
+            co2_value = abs(
+                n.global_constraints.loc[
+                    f"co2_limit_per_country{country}", "mu"
+                ]
+            )
+
+            co2_values.append(round(co2_value, 2))
+
+        df = pd.DataFrame({
+         "year": planning_horizons,
+         "co2_price": co2_values
+         })
+
+        fig = px.bar(
+          df,
+          x="year",
+          y="co2_price",
+          title=f"CO2 Prices - {country}",
+          labels={
+                  "year": "",
+                  "co2_price": "CO2 Price [€/tCO2]"},
+          color_discrete_sequence=["red"])
+        fig.update_layout(height=600, width=1000)
+
+        html_filename = f"{country}_co2_price.html"
+        output_folder = f"results/{study}/htmls/raw_html"
+
+        os.makedirs(output_folder, exist_ok=True)
+
+        html_filepath = os.path.join(output_folder, html_filename)
+        fig.write_html(
+            html_filepath,
+            full_html=False,
+            include_plotlyjs=False
+        )
+
 
 def rename_techs_tyndpp(tech):
     tech = rename_techs(tech)
@@ -758,11 +827,6 @@ def capacities(countries,results):
       columns_to_convert = ['2025','2030','2035', '2040','2045','2050']
       cf[columns_to_convert] = cf[columns_to_convert].apply(pd.to_numeric, errors='coerce')
       cf = cf.groupby('tech').sum().reset_index()
-      #convert H2 electrolysys capacity from GW el to GW H2
-      eff_electrolyser = options.loc[("electrolysis", "efficiency")].item()
-      mask = cf["tech"].str.contains("H2 Electrolysis", case=False, na=False)
-      cf.loc[mask, columns_to_convert] = (
-        cf.loc[mask, columns_to_convert] * eff_electrolyser)
       if 'nuclear' not in cf['tech'].values:
           new_row = pd.DataFrame(
               [['nuclear'] + [0]*len(planning_horizons)],
@@ -1946,7 +2010,7 @@ def create_map_plots(planning_horizons, country):
          
         # Save the map plot as an image
           output_image_path = f"results/{study}/htmls/raw_html/map_plot_{planning_horizon}_{country}.png"
-          fig.savefig(output_image_path)
+          fig.savefig(output_image_path, dpi=80, bbox_inches="tight")
           plt.close(fig)  # Close the figure to avoid displaying it in the notebook
           del fig
           del n
@@ -1978,7 +2042,7 @@ def create_map_plots(planning_horizons, country):
           # if country == 'BE':
           #  fig.savefig(f"results/pdf/Maps_{planning_horizon}.pdf", bbox_inches="tight")
           output_image_path = f"results/{study}/htmls/raw_html/map_plot_{planning_horizon}_{country}.png"
-          fig.savefig(output_image_path)
+          fig.savefig(output_image_path, dpi=80, bbox_inches="tight")
           plt.close(fig)  # Close the figure to avoid displaying it in the notebook
           del fig
           del n
@@ -2491,7 +2555,7 @@ def create_H2_map_plots(planning_horizons):
         
         # Save the H2 map plot as an image
         output_image_path = f"results/{study}/htmls/raw_html/map_h2_plot_{planning_horizon}.png"
-        fig.savefig(output_image_path, bbox_inches="tight")
+        fig.savefig(output_image_path, dpi=80, bbox_inches="tight")
         plt.close(fig)  # Close the figure to avoid displaying it in the notebook
         del fig
         del n
@@ -2518,7 +2582,7 @@ def create_H2_map_plots(planning_horizons):
         # fig.savefig(f"results/pdf/H2_maps_{planning_horizon}.pdf", bbox_inches="tight")
         # Save the H2 map plot as an image
         output_image_path = f"results/{study}/htmls/raw_html/map_h2_plot_{planning_horizon}.png"
-        fig.savefig(output_image_path, bbox_inches="tight")
+        fig.savefig(output_image_path, dpi=80, bbox_inches="tight")
         plt.close(fig)  # Close the figure to avoid displaying it in the notebook
         del fig
         del n
@@ -2579,7 +2643,7 @@ def create_gas_map_plots(planning_horizons):
         plt.rcParams['legend.title_fontsize'] = '20'
         # Save the H2 map plot as an image
         output_image_path = f"results/{study}/htmls/raw_html/map_ch4_plot_{planning_horizon}.png"
-        fig.savefig(output_image_path, bbox_inches="tight")
+        fig.savefig(output_image_path, dpi=80, bbox_inches="tight")
         plt.close(fig)  # Close the figure to avoid displaying it in the notebook
         del fig
         del n
@@ -2606,7 +2670,7 @@ def create_gas_map_plots(planning_horizons):
         # fig.savefig(f"results/pdf/gas_maps_{planning_horizon}.pdf", bbox_inches="tight")
         # Save the H2 map plot as an image
         output_image_path = f"results/{study}/htmls/raw_html/map_ch4_plot_{planning_horizon}.png"
-        fig.savefig(output_image_path, bbox_inches="tight")
+        fig.savefig(output_image_path, dpi=80, bbox_inches="tight")
         plt.close(fig)  # Close the figure to avoid displaying it in the notebook
         del fig
         del n
@@ -2828,7 +2892,7 @@ def create_capacity_chart(capacities, country, unit='Capacity [GW]'):
         ["solar"],
         ["onshore wind", "offshore wind"],
         ["power-to-heat"],
-        ["Electrolysers","VRE connected Electrolysers","FLC Electrolysers"],
+        ["Electrolysers","vre H2 Electrolysis"],
         ["transmission lines"],
         ["nuclear"],
         ["CCGT"],
@@ -2839,7 +2903,7 @@ def create_capacity_chart(capacities, country, unit='Capacity [GW]'):
         ["solar"],
         ["onshore wind", "offshore wind"],
         ["power-to-heat"],
-        ["Electrolysers","VRE connected Electrolysers","FLC Electrolysers"],
+        ["Electrolysers","vre H2 Electrolysis"],
         ["transmission lines"],
         ["power-to-liquid"],
         ["CCGT"],
@@ -2973,6 +3037,10 @@ def create_combined_chart_country(costs,investment_costs, capacities, s_capaciti
     if pypsa_plots["Annual Operational Costs"] == True:
       bar_chart_operational = create_operational_costs(operational_costs, country)
     
+    if pypsa_plots["CO2 Prices"] == True:
+     plot_co2_file_path = os.path.join(raw_html, f"{country}_co2_price.html")
+     with open(plot_co2_file_path, "r") as plot_co2_file:
+       plot_co2_html = plot_co2_file.read()
     # Create capacities chart
     if pypsa_plots["Capacities"] == True:
       capacities_chart = create_capacity_chart(capacities, country)
@@ -3026,7 +3094,8 @@ def create_combined_chart_country(costs,investment_costs, capacities, s_capaciti
     "costs.html": "<a href='#annual_costs'>Annual Costs</a><br>" 
                   "<a href='#annual_total_costs'>Annual Total Costs</a><br>"
                   "<a href='#investment_costs'>Annual Investment Costs</a><br>"
-                  "<a href='#operational_costs'>Annual Operational Costs</a><br>",
+                  "<a href='#operational_costs'>Annual Operational Costs</a><br>"
+                  "<a href='#carbon_prices'>CO2 Cost</a><br>",
                   
     "capacities.html": "<a href='#capacities'>Capacities</a><br>"
                         "<a href='#storage capacities'>Storage Capacities</a><br>",
@@ -3048,7 +3117,8 @@ def create_combined_chart_country(costs,investment_costs, capacities, s_capaciti
     "costs.html": f"<div id='annual_costs'><h2>{display_country} - Annual Costs</h2>{bar_chart.to_html(full_html=False, include_plotlyjs='cdn')}</div>"
                   f"<div id='annual_total_costs'><h2>{display_country} - Annual Total Costs</h2>{bar_chart_clustered.to_html(full_html=False, include_plotlyjs='cdn')}</div>"
                   f"<div id='investment_costs'><h2>{display_country} - Annual Investment Costs</h2>{bar_chart_investment.to_html(full_html=False, include_plotlyjs='cdn')}</div>"
-                  f"<div id='operational_costs'><h2>{display_country} - Annual Operational Costs</h2>{bar_chart_operational.to_html(full_html=False, include_plotlyjs='cdn')}</div>",
+                  f"<div id='operational_costs'><h2>{display_country} - Annual Operational Costs</h2>{bar_chart_operational.to_html(full_html=False, include_plotlyjs='cdn')}</div>"
+                  f"<div id='carbon_prices'><h2>{display_country} - CO2 Costs</h2>{plot_co2_html}</div>",
     "capacities.html": f"<div id='capacities'><h2>{display_country} - Capacities</h2>{capacities_chart.to_html(full_html=False, include_plotlyjs='cdn')}</div>"
                         f"<div id='storage capacities'><h2>{display_country} - Storage Capacities</h2>{s_capacities_chart.to_html(full_html=False, include_plotlyjs='cdn')}</div>",
     "dispatch_plots.html": f"<div id='heat_dispatch_winter'><h2>{display_country} - Heat Dispatch (Winter)</h2>{plot_series_heat_html}</div>"
@@ -3117,6 +3187,7 @@ if __name__ == "__main__":
     study = snakemake.params.study
     logo = logo()
     loaded_files = load_files(study, planning_horizons,cluster, opt, sector_opt)
+    loaded_files_baseline = load_files_baseline(study, planning_horizons,cluster, opt, sector_opt)
     results = calculate_transmission_values( cluster, opt, sector_opt, planning_horizons)
     costs = costs(countries, results)
     c_costs = clustered_costs(countries)

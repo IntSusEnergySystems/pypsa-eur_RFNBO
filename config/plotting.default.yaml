@@ -853,4 +853,12 @@ plotting:
     VRE connected Electrolysers: '#2fb537'
     FLC Electrolysis: '#ffbacd'
     FLC Electrolysers: '#ffbacd'
-    
+    VRE: '#5edc1f'
+    vre battery: '#11875d'
+    vre battery charger: "#9a0200"
+    vre battery discharger: "#9a0200"
+    vre H2 Electrolysis: '#11875d'
+    solar vre: "#9a0200"
+    onwind vre: "#ffbacd"
+    offwind-ac vre: "#c14a09"
+    offwind-dc vre: '#ffb07c'
