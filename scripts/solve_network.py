@@ -667,6 +667,7 @@ def remove_hydrogen_demands(n: pypsa.Network):
         "shipping methanol",
         "H2 for shipping",
         "SMR",
+        "vre H2 Electrolysis"
     ]
     removed_links = n.links.index[
         n.links.carrier.isin(links_to_remove)
@@ -698,13 +699,13 @@ def remove_hydrogen_demands(n: pypsa.Network):
     baseline_network = pypsa.Network(snakemake.input.baseline_network)
     ft = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p1.filter(like="Fischer-Tropsch")).sum().sum()/1e6
     aviation = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="kerosene for aviation")).sum().sum()/1e6
-    naphta = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="naphtha for industry")).sum().sum()/1e6
+    ship_oil = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="shipping oil")).sum().sum()/1e6
     agri_oil = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="agriculture machinery oil")).sum().sum()/1e6
-    ft_percentage = (ft / (aviation + naphta + agri_oil))
+    ft_percentage = (ft / (aviation + ship_oil + agri_oil))
     per_without_efuels = 1-ft_percentage
     cols = n.loads.index[
         n.loads.index.str.contains(
-            "kerosene for aviation|naphtha for industry|agriculture machinery oil",
+            "kerosene for aviation|shipping oil|agriculture machinery oil",
             regex=True
         )
     ]
@@ -717,12 +718,12 @@ def remove_hydrogen_demands(n: pypsa.Network):
     cols_gas = n.loads.p_set.filter(like="gas for industry").index
     n.loads.loc[cols_gas, "p_set"] *= gas_without_efuels
     #removing waste heat produced by H2/molecule technlogies from DH demand
-    ft = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p3.filter(like="Fischer-Tropsch"))
-    sb = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p3.filter(like="Sabatier"))
-    hb = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p3.filter(like="Haber-Bosch"))
-    meth = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p4.filter(like="methanolisation"))
-    electr = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p2.filter(like="H2 Electrolysis"))
-    fc = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p2.filter(like="H2 Fuel Cell"))
+    ft = -(baseline_network.links_t.p3.filter(like="Fischer-Tropsch"))
+    sb = -(baseline_network.links_t.p3.filter(like="Sabatier"))
+    hb = -(baseline_network.links_t.p3.filter(like="Haber-Bosch"))
+    meth = -(baseline_network.links_t.p4.filter(like="methanolisation"))
+    electr = -(baseline_network.links_t.p2.filter(like="H2 Electrolysis"))
+    fc = -(baseline_network.links_t.p2.filter(like="H2 Fuel Cell"))
 
     dfs = [ft, sb, hb, meth, electr, fc]
     #combine all technologies
