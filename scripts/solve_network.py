@@ -652,7 +652,7 @@ def remove_hydrogen_demands(n: pypsa.Network):
     This function removes hydrogen and hydrogen based molecule demands and connecting links, store
     and buses for baseline without hydrogen scenario.
     '''                   
-    remove_carriers = ["H2 for industry", "industry methanol","NH3","shipping methanol","land transport fuel cell"]
+    remove_carriers = ["H2 for industry", "industry methanol","NH3","shipping methanol","land transport fuel cell","H2 for shipping"]
     n.loads = n.loads[~n.loads["carrier"].isin(remove_carriers)]
     n.loads_t.p_set = n.loads_t.p_set.loc[
     :,
@@ -665,6 +665,7 @@ def remove_hydrogen_demands(n: pypsa.Network):
         "methanolisation",
         "Fischer-Tropsch",
         "shipping methanol",
+        "H2 for shipping",
         "SMR",
     ]
     removed_links = n.links.index[
@@ -697,9 +698,16 @@ def remove_hydrogen_demands(n: pypsa.Network):
     baseline_network = pypsa.Network(snakemake.input.baseline_network)
     ft = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p1.filter(like="Fischer-Tropsch")).sum().sum()/1e6
     aviation = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="kerosene for aviation")).sum().sum()/1e6
-    ft_percentage = (ft / aviation)
+    naphta = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="naphtha for industry")).sum().sum()/1e6
+    agri_oil = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="agriculture machinery oil")).sum().sum()/1e6
+    ft_percentage = (ft / (aviation + naphta + agri_oil))
     per_without_efuels = 1-ft_percentage
-    cols = n.loads.p_set.filter(like="kerosene for aviation").index
+    cols = n.loads.index[
+        n.loads.index.str.contains(
+            "kerosene for aviation|naphtha for industry|agriculture machinery oil",
+            regex=True
+        )
+    ]
     n.loads.loc[cols, "p_set"] *= per_without_efuels
     #removing efuels produced by methanation from gas for industry demands
     methanation = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p1.filter(like="Sabatier")).sum().sum()/1e6
@@ -709,12 +717,12 @@ def remove_hydrogen_demands(n: pypsa.Network):
     cols_gas = n.loads.p_set.filter(like="gas for industry").index
     n.loads.loc[cols_gas, "p_set"] *= gas_without_efuels
     #removing waste heat produced by H2/molecule technlogies from DH demand
-    ft = -(baseline_network.links_t.p3.filter(like="Fischer-Tropsch"))
-    sb = -(baseline_network.links_t.p3.filter(like="Sabatier"))
-    hb = -(baseline_network.links_t.p3.filter(like="Haber-Bosch"))
-    meth = -(baseline_network.links_t.p4.filter(like="methanolisation"))
-    electr = -(baseline_network.links_t.p2.filter(like="H2 Electrolysis"))
-    fc = -(baseline_network.links_t.p2.filter(like="H2 Fuel Cell"))
+    ft = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p3.filter(like="Fischer-Tropsch"))
+    sb = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p3.filter(like="Sabatier"))
+    hb = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p3.filter(like="Haber-Bosch"))
+    meth = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p4.filter(like="methanolisation"))
+    electr = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p2.filter(like="H2 Electrolysis"))
+    fc = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p2.filter(like="H2 Fuel Cell"))
 
     dfs = [ft, sb, hb, meth, electr, fc]
     #combine all technologies
@@ -729,6 +737,20 @@ def remove_hydrogen_demands(n: pypsa.Network):
             columns=urban_cols.str.extract(r'^([A-Z]{2}\d+\s\d+)')[0]
         ).set_axis(urban_cols, axis=1)
     )
+    #making all heat sector technologies minimum investmnet according to baseline scenario
+    heating_tech_carriers = ["urban central water tanks charger","urban central water tanks discharger",
+                              "urban central water pits charger","urban central water pits discharger",
+                              "urban central air heat pump","urban central resistive heater","urban central gas boiler",
+                              "geothermal district heat","rural air heat pump","rural biomass boiler",
+                              "rural gas boiler","rural ground heat pump","rural resistive heater",
+                              "rural water tanks charger","rural water tanks discharger","urban decentral air heat pump",
+                              "urban decentral biomass boiler","urban decentral gas boiler","urban decentral resistive heater",
+                              "urban decentral water tanks charger","urban decentral water tanks discharger",
+                              "urban central solid biomass CHP CC","urban central solid biomass CHP",
+                              "urban central gas CHP CC","urban central gas CHP"]
+    mask = (baseline_network.links.carrier.isin(heating_tech_carriers) & (baseline_network.links.build_year == investment_year))
+    idx = baseline_network.links.index[mask].intersection(n.links.index)
+    n.links.loc[idx, "p_nom_min"] = (baseline_network.links.loc[idx, "p_nom_opt"].round(2))
     
     return n
 
@@ -1531,7 +1553,7 @@ def add_co2price_country(n, co2_price_countries, nyears=1.0):
 def get_vre_share_carbon_intensity(country):
     '''
     This function gets the VRE share and co2 intensity (g/Kwh) in electricity grid power supply
-    from the previous optimised planning horizon which is further used in the additionality constraint.
+    from the previous optimised planning horizon which is further used in the additionality constraint. 
     '''
     
     n=pypsa.Network(f"results/{study}/networks/base_s_{clusters}__{sector_opts}_{previous_year}.nc")
@@ -1547,7 +1569,7 @@ def get_vre_share_carbon_intensity(country):
     conv_types = list(
       set(config["electricity"]["conventional_carriers"] + ["urban central gas CHP",
             "urban central gas CHP CC","urban central solid biomass CHP","urban central solid biomass CHP CC",
-            "H2 Fuel Cell","H2 turbine"]))
+            "H2 Fuel Cell","H2 turbine","geothermal organic rankine cycle"]))
     gens = n.generators.index[
       n.generators.carrier.isin(generator_types)
     ]
@@ -1608,7 +1630,12 @@ def get_vre_share_carbon_intensity(country):
     emissions = emissions / 3.6
     total_emissions = emissions.sum()
 
-    renewable_carriers = generator_types
+    renewable_carriers = generator_types + [
+    "H2 Fuel Cell",
+    "urban central solid biomass CHP",
+    "urban central solid biomass CHP CC",
+    "H2 turbine",
+    "geothermal organic rankine cycle"]
 
     renewable_total = tota_elec_grid_techs[
     tota_elec_grid_techs.index.isin(renewable_carriers)
@@ -1633,7 +1660,7 @@ def add_additionality_constraint(n: pypsa.Network):
     #considering only vre carriers
     generator_types = list(
         set(config["electricity"]["renewable_carriers"] + ["solar rooftop"])
-        - {"hydro"}
+        + {"geothermal organic rankine cycle"}
     )
     #loading corresponding baseline network
     if snakemake.config["run"]["name"].startswith(("RFNBO")):
@@ -1641,17 +1668,26 @@ def add_additionality_constraint(n: pypsa.Network):
     else:
         logger.error("Baseline network not found for RFNBO scenario.")
         return
-    #vre variables
+    #vre variables in generators category
     p_nom_gen = n.model["Generator-p_nom"]
+    #vre variables in links category
+    p_nom_link = n.model["Link-p_nom"]
     gens = n.generators[
         (n.generators.p_nom_extendable == True) & 
         (n.generators.carrier.isin(generator_types))
     ].index
+    gens_links = n.links[
+        (n.links.p_nom_extendable == True) & 
+        (n.links.carrier.isin(generator_types))
+    ].index
     #vre capacities grouped by country
     vre_grouper = n.generators.loc[gens].bus.map(n.buses.country)
+    vre_grouper_links = n.links.loc[gens_links].bus.map(n.buses.country)
     #total vre capacities on country buses
-    vre_cap = p_nom_gen.loc[gens].groupby(vre_grouper).sum().rename(bus="country")
-    
+    vre_cap_gen = p_nom_gen.loc[gens].groupby(vre_grouper).sum().rename(bus="country")
+    vre_cap_link = p_nom_link.loc[gens_links].groupby(vre_grouper_links).sum().rename(bus="country")
+    vre_cap = vre_cap_gen + vre_cap_link
+    print(vre_cap)
     electrolysers = n.links[
         (n.links.p_nom_extendable == True) & 
         (n.links.carrier == "H2 Electrolysis")
@@ -1667,7 +1703,14 @@ def add_additionality_constraint(n: pypsa.Network):
             (baseline_updated.generators.p_nom_extendable == True) & 
             (baseline_updated.generators.carrier.isin(generator_types))
     ]
-    rhs = baseline_gens.groupby(baseline_gens.bus.map(baseline_updated.buses.country)).p_nom_opt.sum()
+    rhs_gens = baseline_gens.groupby(baseline_gens.bus.map(baseline_updated.buses.country)).p_nom_opt.sum()
+    baseline_links = baseline_updated.links[
+            (baseline_updated.links.p_nom_extendable == True) & 
+            (baseline_updated.links.carrier.isin(generator_types))
+    ]
+    rhs_links = baseline_links.groupby(baseline_links.bus.map(baseline_updated.buses.country)).p_nom_opt.sum()
+    rhs = rhs_gens + rhs_links
+    print(rhs)
     rhs.index.name = "country"
 
     #steps to ensure alighnment
@@ -1773,7 +1816,6 @@ def add_additionality_constraint_interconnected(n: pypsa.Network):
     """
     generator_types = list(
         set(config["electricity"]["renewable_carriers"] + ["solar rooftop"])
-        - {"hydro"}
     )
 
     if snakemake.config["run"]["name"].startswith(("RFNBO")):
@@ -1842,7 +1884,7 @@ def add_global_additionality_constraint(n: pypsa.Network):
     Canbe used for No geographic constraint variant.
     """
     generator_types = list(
-        set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"}
+        set(config["electricity"]["renewable_carriers"] + ["solar rooftop"])
     )
     
     if snakemake.config["run"]["name"].startswith(("RFNBO")):
@@ -1882,24 +1924,32 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
     """
     This constraint add the temporal correlation criterion consrtaint for RFNBO scenario.
     Used along same bidding zone additionality constraint. Applying only to VRE capacities and electrolusers installed
-    in or after 2035 to consider istalled beofre as grandfathered generators.
+    in or after 2035 to consider istalled beofre as grandfathered generators.include, hydro, geothermal, ror
     """
     #considering only vre carriers
     generator_types = list(
-         set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"}
+         set(config["electricity"]["renewable_carriers"] + ["solar rooftop","geothermal organic rankine cycle"])
      )
     
     gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
+    gens_links = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier.isin(generator_types))].index
     p_gen = n.model["Generator-p"].sel(snapshot=sns, name=gens)
+    p_gen_link = n.model["Link-p"].sel(snapshot=sns, name=gens)
     
     electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
     p_electrolysers = n.model["Link-p"].sel(snapshot=sns, name=electrolysers)
 
     #grouping by country
     gen_country = n.generators.loc[gens, "bus"].map(n.buses.country).rename("country")
+    gen_country_link = n.links.loc[gens_links, "bus"].map(n.buses.country).rename("country")
     link_country = n.links.loc[electrolysers, "bus0"].map(n.buses.country).rename("country")
 
-    vre_total = p_gen.groupby(gen_country).sum()
+    vre_gen = p_gen.groupby(gen_country).sum()
+    print(vre_gen)
+    vre_link = p_gen_link.groupby(gen_country_link).sum()
+    print(vre_link)
+    vre_total = vre_gen + vre_link
+    print(vre_total)
     electrolysers_total = p_electrolysers.groupby(link_country).sum()
     #allign countries
     common_countries = (
@@ -1932,7 +1982,7 @@ def add_temporal_correlation_interconnected(n: pypsa.Network, sns: pd.DatetimeIn
     """
     Adds interconnected temporal correlation.
     """
-    generator_types = list(set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"})
+    generator_types = list(set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]))
     neighbours = get_country_neighbours(n)
 
     p_gen = n.model["Generator-p"].sel(snapshot=sns)
@@ -1969,7 +2019,7 @@ def add_global_temporal_correlation_constraint(n: pypsa.Network, sns: pd.Datetim
     Used along global additionality constraint.
     """
     generator_types = list(
-        set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"}
+        set(config["electricity"]["renewable_carriers"] + ["solar rooftop"])
     )
     
     gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
@@ -1991,20 +2041,25 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
     Adds temporal correlation constraint aggregated on a monthly basis.
     """
     generator_types = list(
-        set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"}
+        set(config["electricity"]["renewable_carriers"] + ["solar rooftop","geothermal organic rankine cycle"])
     )
 
     p_gen = n.model["Generator-p"].sel(snapshot=sns)
+    p_gen_link = n.model["Link-p"].sel(snapshot=sns)
     p_electrolysers = n.model["Link-p"].sel(snapshot=sns)
 
     gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
+    gens_link = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier.isin(generator_types))].index
     electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
 
     gen_country = n.generators.loc[gens, "bus"].map(n.buses.country).rename("country")
+    gen_country_link = n.links.loc[gens_link, "bus"].map(n.buses.country).rename("country")
     link_country = n.links.loc[electrolysers, "bus0"].map(n.buses.country).rename("country")
 
-    vre_monthly = p_gen.sel(name=gens).groupby(gen_country).sum().groupby("snapshot.month").sum()
-
+    gen_monthly = p_gen.sel(name=gens).groupby(gen_country).sum().groupby("snapshot.month").sum()
+    link_monthly = p_gen_link.sel(name=gens).groupby(gen_country_link).sum().groupby("snapshot.month").sum()
+    vre_monthly = gen_monthly + link_monthly
+    print(vre_monthly)
     elec_monthly = p_electrolysers.sel(name=electrolysers).groupby(link_country).sum().groupby("snapshot.month").sum()
 
     common_countries = list(
@@ -2039,7 +2094,7 @@ def add_global_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd
     Adds a global temporal correlation constraint aggregated on a monthly basis.
     """
     generator_types = list(
-        set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]) - {"hydro"}
+        set(config["electricity"]["renewable_carriers"] + ["solar rooftop"])
     )
 
     gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
@@ -2149,7 +2204,7 @@ def extra_functionality(
     else:
         add_co2_atmosphere_constraint(n, snapshots)
 
-    if config["sector"]["enhanced_geothermal"]["enable"]:
+    if config["sector"]["enhanced_geothermal"]["flexible"]:
         add_flexible_egs_constraint(n)
 
     if config["sector"]["imports"]["enable"]:
@@ -2177,7 +2232,11 @@ def extra_functionality(
         if investment_year != 2025:
          add_co2price_country(n,co2_price_countries,nyears)
     if constraints["additionality"]:
+     if scenario.startswith("RFNBO_CR"):
       if investment_year >= 2030:
+        add_additionality_constraint(n)
+     else:
+      if investment_year >= 2035:
         add_additionality_constraint(n)
     if constraints["interconnected_additionality"]:
        if investment_year >= 2035:
@@ -2186,7 +2245,11 @@ def extra_functionality(
       if investment_year >= 2035:
         add_global_additionality_constraint(n)
     if constraints["temporal_correlation"]:
-      if investment_year >= target_year:
+     if scenario.startswith("RFNBO_CR"):
+      if investment_year >= 2030:
+        add_temporal_correlation_constraint(n, snapshots)
+     else:
+      if investment_year >= 2035:
         add_temporal_correlation_constraint(n, snapshots)
     if constraints["interconnected_temporal_correlation"]:
        if investment_year >= 2035:
@@ -2195,6 +2258,10 @@ def extra_functionality(
       if investment_year >= 2035:
         add_global_temporal_correlation_constraint(n, snapshots)
     if constraints["temporal_correlation_monthly"]:
+     if scenario.startswith("RFNBO_CR"):
+       if investment_year == 2025:
+        add_temporal_correlation_monthly_constraint(n, snapshots)
+     else:
        if investment_year >= 2035:
         add_temporal_correlation_monthly_constraint(n, snapshots)
     if constraints["global_temporal_correlation_monthly"]:
@@ -2406,18 +2473,16 @@ if __name__ == "__main__":
     study = snakemake.params.study
     clusters = snakemake.params.clusters[0]
     sector_opts = snakemake.params.sector_opts[0]
+    scenario = config["run"]["name"]
     # Load network
     investment_year = int(snakemake.wildcards.planning_horizons[-4:])
     previous_year = investment_year - 5
-    if config["run"]["name"] == "RFNBO_CR":
-        temporal_year = 2030
-        target_year = 2030
+    if scenario.startswith("RFNBO_CR"):
+        temporal_year = 2025
     elif config["run"]["name"] == "RFNBO_VAR-A2":
         temporal_year = 2040 if investment_year <= 2040 else 2030
-        target_year = 2040
     else:
         temporal_year = 2035 if investment_year <= 2035 else 2030
-        target_year = 2035
             
     if investment_year >= 2030:
         previous_horizon_data = [get_vre_share_carbon_intensity(country) for country in countries]
@@ -2438,7 +2503,7 @@ if __name__ == "__main__":
     n = imposed_transmission_limit(
         n,
         config=snakemake.config,)
-    if config["run"]["name"] == "baseline_without_H2":
+    if scenario == "baseline_without_H2":
      if investment_year != 2025:
       n = remove_hydrogen_demands(n,)
     # Determine solve mode
