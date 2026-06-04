@@ -3209,6 +3209,7 @@ if __name__ == "__main__":
     if plots['Heat Dispatch Summer']:
         plot_series_heat(cluster, opt, sector_opt, planning_horizons,start = "2013-07-01",stop = "2013-07-07",title="Heat Dispatch (Summer Week)")
     plot_demands(countries)
+    co2_price(countries)
     if plots['Map Plots']:
         for country in countries:
          if country == "EU":
