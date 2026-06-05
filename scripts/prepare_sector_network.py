@@ -1836,7 +1836,8 @@ def add_h2_gas_infrastructure(
     #new implementation for direct VRE connected electrolysers, considering an isolated VRE bus,
     #on which solar, wind generators are coonected with an option of battery storage. The electrolyser
     #can only fed by these generators connected to the bus.
-    if constraints["activate_direct_vre_connected_electrolysers"]:
+    if config["run"]["name"] != "baseline_without_H2":
+     if constraints["activate_direct_vre_connected_electrolysers"]:
         vre_techs = ["solar", "onwind", "offwind-ac", "offwind-dc"]
         vre_gens = n.generators[n.generators.carrier.isin(vre_techs)]
         active_nodes = vre_gens.bus.unique().tolist()
@@ -1871,6 +1872,8 @@ def add_h2_gas_infrastructure(
         link_names = [f"{node} VRE H2 Electrolysis" for node in active_nodes]
         bus0_buses = [f"{node} VRE" for node in active_nodes]
         bus1_buses = [f"{node} H2" for node in active_nodes]
+        matched_links = n.links[n.links.carrier == "H2 Electrolysis"]
+        electrolyser_cost = matched_links["capital_cost"].iloc[0]
         n.add(
             "Link",
             link_names,
@@ -1879,7 +1882,7 @@ def add_h2_gas_infrastructure(
             p_nom_extendable=True,
             carrier="vre H2 Electrolysis",
             efficiency=costs.at["electrolysis", "efficiency"],
-            capital_cost=costs.at["electrolysis", "capital_cost"],
+            capital_cost=electrolyser_cost,
             p_min_pu=options["min_part_load_electrolysis"],
             lifetime=costs.at["electrolysis", "lifetime"],
         )

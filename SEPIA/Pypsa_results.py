@@ -34,6 +34,7 @@ import shutil
 import plotly.io as pio
 import gc    
 import pickle
+import numpy as np
 
 def rename_techs_tyndp(tech):
     tech = rename_techs(tech)
@@ -41,6 +42,10 @@ def rename_techs_tyndp(tech):
         return "power-to-heat"
     elif tech in ["H2 Electrolysis"]:
         return "Electrolysers"
+    elif tech in ["geothermal district heat","geothermal organic rankine cycle","geothermal heat"]:
+        return "geothermal"
+    elif tech in ["vre H2 Electrolysis"]:
+        return "Direct Connected Electrolysers"
     elif tech in ["FLC Electrolysis"]:
         return "FLC Electrolysers"
     elif tech in ["solar Electrolyser","onwind Electrolyser","offwind-ac Electrolyser","offwind-dc Electrolyser"]:
@@ -53,12 +58,14 @@ def rename_techs_tyndp(tech):
         return "battery storage"
     elif tech in [ "biomass boiler", "oil boiler","gas boiler"]:
         return "boilers"
-    elif "solar" in tech:
+    elif tech in ["solar", "solar vre"]:
         return "solar"
     elif tech == "Fischer-Tropsch":
         return "power-to-liquid"
-    elif "offshore wind" in tech:
+    elif tech in ["offshore wind", "offwind-ac vre","offwind-dc vre"]:
         return "offshore wind"
+    elif tech in ["onshore wind", "onwind vre"]:
+        return "onshore wind"
     elif tech in ["co2 sequestered","CO2 sequestration", "co2", "SMR CC", "process emissions CC","process emissions", "solid biomass for industry CC", "gas for industry CC","CO2 pipeline"]:
          return "CCUS"
     elif tech in ["biomass", "solid biomass", "solid biomass for industry", "biogas", "solid biomass transport", "biomass exports", "biogas exports","municipal solid waste","municipal solid waste transport","solid biomass powerplants","biomass-to-methanol","unsustainable bioliquids","unsustainable solid biomass"]:
@@ -503,11 +510,11 @@ def clustered_costs(countries):
  c_costs = {}
  def rename_techs_ty(tech):
     tech = rename_techs(tech)
-    if tech in ["synthetic fuels & techs","power-to-liquid","power-to-heat","power-to-gas","CCU","CCUS","DAC","boilers","load shedding","VRE connected Electrolysers","FLC Electrolysers"]:
+    if tech in ["synthetic fuels & techs","power-to-liquid","power-to-heat","power-to-gas","CCU","CCUS","DAC","boilers","load shedding","Electrolysers","Direct Connected Electrolysers"]:
         return "Uses"
     elif tech in ["transmission lines","distribution network","battery storage","TES & H2 storage","H2 & gas pipelines"]:
         return "Networks"
-    elif tech in ["solar","solar PV","onshore wind","offshore wind","nuclear","hydroelectricity","biomass fuel & techs","CHP"]:
+    elif tech in ["solar","solar PV","onshore wind","offshore wind","nuclear","hydroelectricity","biomass fuel & techs","CHP","geothermal"]:
         return "Power Plants"
     elif tech in ["Electricity Imports/Exports","Hydrogen Imports/Exports","Fossil fuels & powerplants"]:
           return "Imports"
@@ -624,7 +631,7 @@ def rename_techs_tynd(tech):
                 "hydroelectricity","SMR", "ammonia cracker", "Haber-Bosch", "BioSNG", "biomass to liquid","methanol","ammonia","methanolisation","shipping methanol","non-sequestered HVC","offshore wind (Float)","solar-hsat","water pits",
                 "air heat pump","air-sourced heat pump","ground heat pump","solar PV","solar rooftop", "offshore wind","offshore wind (AC)", "offshore wind (DC)","solid biomass to hydrogen","water pits charger","water pits discharger",
                 "onshore wind", "solar thermal","H2 pipeline", "gas pipeline","gas pipeline new","H2 pipeline retrofitted","transmission lines","Transmission Lines","biomass-to-methanol","industry methanol", "OCGT methanol","CO2 pipeline",
-                "solar Electrolyser","onwind Electrolyser","offwind-ac Electrolyser","offwind-dc Electrolyser","FLC Electrolysers"]:
+                "solar Electrolyser","onwind Electrolyser","offwind-ac Electrolyser","offwind-dc Electrolyser","Direct Connected Electrolysers","geothermal"]:
         return "VOM of Technologies"
     elif tech in ["biomass", "solid biomass", "solid biomass for industry", "biogas", "solid biomass transport", "biomass exports", "biogas exports","solid biomass import","biomass-to-methanol","unsustainable bioliquids","unsustainable solid biomass"]:
           return "Biomass"
@@ -744,11 +751,32 @@ def co2_price(countries):
              continue
             n = loaded_files_baseline[planning_horizon]
 
-            co2_value = abs(
-                n.global_constraints.loc[
-                    f"co2_limit_per_country{country}", "mu"
-                ]
-            )
+            if country == "EU":
+                #mean CO2 price across all countries
+                mus = []
+
+                for c in countries:
+                    if c == "EU":
+                        continue
+
+                    constraint = f"co2_limit_per_country{c}"
+
+                    if constraint in n.global_constraints.index:
+                        mus.append(
+                            abs(
+                                n.global_constraints.loc[
+                                    constraint, "mu"
+                                ]
+                            )
+                        )
+
+                co2_value = np.mean(mus) if mus else 0
+            else:
+                co2_value = abs(
+                    n.global_constraints.loc[
+                        f"co2_limit_per_country{country}", "mu"
+                    ]
+                )
 
             co2_values.append(round(co2_value, 2))
 
@@ -787,8 +815,8 @@ def rename_techs_tyndpp(tech):
         return "power-to-heat"
     elif tech in ["H2 Electrolysis"]:
         return "Electrolysers"
-    elif tech in ["FLC Electrolysis"]:
-        return "FLC Electrolysers"
+    elif tech in ["vre H2 Electrolysis"]:
+        return "Direct Connected Electrolysers"
     elif tech in ["solar Electrolyser","onwind Electrolyser","offwind-ac Electrolyser","offwind-dc Electrolyser"]:
         return "VRE connected Electrolysers"
     elif tech in ["electricity distribution grid"]:
@@ -801,6 +829,14 @@ def rename_techs_tyndpp(tech):
         return "power-to-liquid"
     elif "offshore wind" in tech:
         return "offshore wind"
+    elif tech in ["solar vre"]:
+        return "solar rfnbo"
+    elif tech == "Fischer-Tropsch":
+        return "power-to-liquid"
+    elif tech in ["offwind-ac vre","offwind-dc vre"]:
+        return "offshore rfnbo"
+    elif tech in ["onwind vre"]:
+        return "onshore wind rfnbo"
     elif tech in ["hot water storage","water pits","water pits charger","water pits discharger"]:
         return "thermal energy storage"
     elif "load" in tech:
@@ -2889,9 +2925,9 @@ def create_capacity_chart(capacities, country, unit='Capacity [GW]'):
     tech_colors["DC Transmission"] = "#104E8B"
     tech_colors["Transmission lines"] = tech_colors["Transmission Lines"]
     groups = [
-        ["solar"],
+        ["solar","solar rfnbo"],
         ["onshore wind", "offshore wind"],
-        ["power-to-heat"],
+        ["onshore wind rfnbo", "offshore wind rfnbo"],
         ["Electrolysers","vre H2 Electrolysis"],
         ["transmission lines"],
         ["nuclear"],
@@ -2900,9 +2936,9 @@ def create_capacity_chart(capacities, country, unit='Capacity [GW]'):
     ]
     
     groupss = [
-        ["solar"],
+        ["solar","solar rfnbo"],
         ["onshore wind", "offshore wind"],
-        ["power-to-heat"],
+        ["onshore wind rfnbo", "offshore wind rfnbo"],
         ["Electrolysers","vre H2 Electrolysis"],
         ["transmission lines"],
         ["power-to-liquid"],

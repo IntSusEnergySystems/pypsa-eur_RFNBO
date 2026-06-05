@@ -862,3 +862,4 @@ plotting:
     onwind vre: "#ffbacd"
     offwind-ac vre: "#c14a09"
     offwind-dc vre: '#ffb07c'
+    Direct Connected Electrolysers: '#11875d'
