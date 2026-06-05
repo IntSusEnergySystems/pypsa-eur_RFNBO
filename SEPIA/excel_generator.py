@@ -41,24 +41,6 @@ def process_network(cluster, opt, sector_opt, planning_horizon, country):
          Rail_demand = Rail_demand[country].sum()
         else:
          Rail_demand = Rail_demand.sum().sum()
-        if config["run"]["name"] != "baseline_without_H2":
-         if country != 'EU':
-              ammonia_t = industry_demand.loc["ammonia"]
-              ammonia = ammonia_t.filter(like=country).sum()
-         else:
-              ammonia_t = industry_demand.loc["ammonia"]
-              ammonia = ammonia_t.sum().sum()
-        else:
-            ammonia = 0
-
-        collection = []
-        collection.append(
-            pd.Series(
-                dict(label="NH3", source="H2", target="ammonia for industry", value=ammonia)
-            )
-        )
-
-        collection = pd.concat(collection, axis=1).T
 
         columns = ["label", "source", "target", "value"]
 
@@ -264,7 +246,7 @@ def process_network(cluster, opt, sector_opt, planning_horizon, country):
         # make DAC demand
         df.loc[df.label == "DAC", "target"] = "DAC"
 
-        to_concat = [df, gen, su, sto, load, collection]
+        to_concat = [df, gen, su, sto, load]
         connections = pd.concat(to_concat).sort_index().reset_index(drop=True)
         # aggregation
 
@@ -347,7 +329,7 @@ entries_to_select = ['solar', 'solar rooftop', 'onwind','solar-hsat',
                       'gas for industry CC', 'industry electricity',
                       'low-temperature heat for industry', 'H2 for industry', 'naphtha for industry',
                       'H2 for non-energy', 'agriculture machinery oil', 'agriculture electricity',
-                      'EV charger', 'EV charger_2', 'V2G', 'V2G_2','NH3_2','NH3',
+                      'EV charger', 'EV charger_2', 'V2G', 'V2G_2','NH3',
                       'urban central air heat pump', 'urban central air heat pump_2', 'urban central gas boiler',
                       'urban central gas boiler_2','methanolisation_3',
                       'urban central resistive heater', 'urban central resistive heater_2',
@@ -430,7 +412,7 @@ entry_label_mapping = {
     'methanolisation_2': {'label': 'waste heat methanolisation', 'source': 'TWh', 'target': 'prehdvap'},
     'Haber-Bosch_3': {'label': 'Production losses of ammonia)', 'source': 'TWh', 'target': 'prohydclam'},
     'Haber-Bosch_2': {'label': 'haberbosch waste heat', 'source': 'TWh', 'target': 'prohydvap'},
-    'Haber-Bosch_4': {'label': 'Production of ammonia from H2)', 'source': 'TWh', 'target': 'prohydclamm'},
+    'Haber-Bosch_4': {'label': 'Production of ammonia from H2)', 'source': 'TWh', 'target': 'prohydclammt'},
     'urban decentral biomass boiler_2': {'label': 'Transformation losses (solid biomass boilers)',
                                                       'source': 'TWh', 'target': 'lossbbb'},
     'rural gas boiler_2': {'label': 'Transformation losses rural gas boiler', 'source': 'TWh',
@@ -515,7 +497,6 @@ entry_label_mapping = {
     'V2G': {'label': 'vehicle to grid', 'source': 'TWh', 'target': 'prevtg'},
     'V2G_2': {'label': 'vehicle to grid losses', 'source': 'TWh', 'target': 'prevtgloss'},
     'NH3': {'label': 'hydrogen to ammonia', 'source': 'TWh', 'target': 'prohydclamm'},
-    'NH3_2': {'label': 'ammonia for industry', 'source': 'TWh', 'target': 'preammind'},
     'urban central air heat pump': {'label': 'Heat energy output from centralised heat pumps', 'source': 'TWh',
                                     'target': 'prbrchpac'},
     'urban central air heat pump_2': {'label': 'Heat energy output from centralised heat pumps', 'source': 'TWh',

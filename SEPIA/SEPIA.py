@@ -308,16 +308,6 @@ def prepare_sepia(countries):
         flows_co2.loc['2040', (en_code + '_ghg', 'gas_ghg', '')] = values_gas_emm['2040'] * co2_intensity_gas
         flows_co2.loc['2045', (en_code + '_ghg', 'gas_ghg', '')] = values_gas_emm['2045'] * co2_intensity_gas
         flows_co2.loc['2050', (en_code + '_ghg', 'gas_ghg', '')] = values_gas_emm['2050'] * co2_intensity_gas
-    
-    tot_emm = flows_co2.columns.get_level_values('Target').isin(GHG_SECTORS)
-    tot_emm = flows_co2.loc[:, tot_emm]
-    tot_emm = tot_emm.groupby(level='Target', axis=1).sum() 
-    for en_code in ['net']:
-        blg_cap = flows_co2[('atm', 'blg' + '_ghg', '')].squeeze().rename_axis(None)
-        blg_cap_cc = flows_co2[('atm', 'blg' + '_ghg', 'cc')].squeeze().rename_axis(None)
-        dac_cap = flows_co2[('atm', 'stm', '')].squeeze().rename_axis(None)
-        values_atm = tot_emm['atm'] - tot_emm['bm_ghg'] - dac_cap - blg_cap - blg_cap_cc
-        flows_co2[('atm',en_code + '_ghg',  'net')] = values_atm
         
     if country != 'EU':
      for en_code in ['met']:
@@ -371,6 +361,15 @@ def prepare_sepia(countries):
     # for en_code in ['ind']: 
     #   value_ind = flows_co2[('oil_ghg', 'hvc_ghg', 'oil')].squeeze().rename_axis(None)
     #   flows_ghg.loc['2020', ('ind_ghg','pet_pe', 'oil')] = value_ind['2020']
+    tot_emm = flows_co2.columns.get_level_values('Target').isin(GHG_SECTORS)
+    tot_emm = flows_co2.loc[:, tot_emm]
+    tot_emm = tot_emm.groupby(level='Target', axis=1).sum() 
+    tot_emm_source = flows_co2.columns.get_level_values('Source').isin(GHG_SECTORS)
+    tot_emm_source = flows_co2.loc[:, tot_emm_source]
+    tot_emm_source = tot_emm_source.groupby(level='Source', axis=1).sum()
+    for en_code in ['net']:
+        values_atm = tot_emm['atm'] - tot_emm_source['atm']
+        flows_co2[('atm',en_code + '_ghg',  'net')] = values_atm
     
     filtered_flows = [
     ('imp', 'gaz_pe', ''),

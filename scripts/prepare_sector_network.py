@@ -1906,7 +1906,7 @@ def add_h2_gas_infrastructure(
         n.add(
               "Link",
               [f"{node} vre battery charger" for node in active_nodes],
-              bus0=vre_buses,  # Source: Pooled VRE generation
+              bus0=vre_buses,
               bus1=battery_buses,
               carrier="vre battery charger",
               efficiency=inv_efficiency,
