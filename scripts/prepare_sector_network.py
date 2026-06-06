@@ -456,6 +456,7 @@ def update_wind_solar_costs(
         "solar": "solar-utility",
         "solar-hsat": "solar-hsat",
         "onwind": "onwind",
+        
     }
 
     for carrier, cost_key in carrier_cost_dict.items():
@@ -1857,7 +1858,7 @@ def add_h2_gas_infrastructure(
                 p_max_pu_new.columns = vre_names
                 target_buses = [node_to_vre_bus[node] for node in tech_nodes]
                 matched_gens = n.generators[n.generators.carrier.str.contains(tech)]
-                tech_cost = matched_gens["capital_cost"].iloc[0]
+                tech_costs = tech_gens["capital_cost"].values
                 tech_lifetime = matched_gens["lifetime"].iloc[0]
                 n.add(
                     "Generator",
@@ -1865,7 +1866,7 @@ def add_h2_gas_infrastructure(
                     bus=target_buses,
                     carrier=tech + " vre",
                     p_nom_extendable=True,
-                    capital_cost=tech_cost,
+                    capital_cost=tech_costs,
                     p_max_pu=p_max_pu_new,
                     lifetime=tech_lifetime
                 )
@@ -6370,6 +6371,28 @@ def add_import_options(
             marginal_cost=import_options["H2"],
         )
 
+def update_vre_costs(n: pypsa.Network,):
+    '''
+    This function updates capital costs of direct connected vre technologies to the costs of
+    these technologies already used in the model which include updates like connection costs
+    and landfill costs.
+    '''
+    techs = ["solar", "onwind", "offwind-ac", "offwind-dc"]
+    for tech in techs:
+        cost_map = (
+            n.generators[n.generators.carrier == tech]
+            .set_index("bus")["capital_cost"]
+        )
+
+        vre_mask = n.generators.carrier == f"{tech} vre"
+        original_buses = (
+            n.generators.loc[vre_mask, "bus"]
+            .str.replace(" VRE", "", regex=False)
+        )
+
+        n.generators.loc[vre_mask, "capital_cost"] = (
+            original_buses.map(cost_map)
+        )
 
 if __name__ == "__main__":
     if "snakemake" not in globals():
@@ -6736,6 +6759,7 @@ if __name__ == "__main__":
     maybe_adjust_costs_and_potentials(
         n, snakemake.params["adjustments"], investment_year
     )
+    update_vre_costs(n)
 
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
 
