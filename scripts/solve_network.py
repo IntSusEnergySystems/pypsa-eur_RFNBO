@@ -2220,7 +2220,7 @@ def extra_functionality(
     ) and {"solar-hsat", "solar"}.issubset(
         config["electricity"]["extendable_carriers"]["Generator"]
     ):
-       # if investment_year > 2025:
+      if investment_year > 2025:
         add_solar_potential_constraints(n, config)
 
     if n.config.get("sector", {}).get("tes", False):
@@ -2231,8 +2231,8 @@ def extra_functionality(
         ).any():
             add_TES_energy_to_power_ratio_constraints(n)
             add_TES_charger_ratio_constraints(n)
-    # if investment_year > 2025:
-    add_onwind_potential_constraints(n, config)
+    if investment_year > 2025:
+     add_onwind_potential_constraints(n, config)
     add_battery_constraints(n)
     add_lossy_bidirectional_link_constraints(n)
     add_pipe_retrofit_constraint(n)
