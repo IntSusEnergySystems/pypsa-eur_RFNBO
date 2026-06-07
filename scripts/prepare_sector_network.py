@@ -6759,7 +6759,8 @@ if __name__ == "__main__":
     maybe_adjust_costs_and_potentials(
         n, snakemake.params["adjustments"], investment_year
     )
-    update_vre_costs(n)
+    if config["run"]["name"] != "baseline_without_H2":
+      update_vre_costs(n)
 
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
 

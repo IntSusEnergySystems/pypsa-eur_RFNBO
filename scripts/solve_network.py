@@ -1720,7 +1720,7 @@ def add_additionality_constraint(n: pypsa.Network):
     ].index
     #vre capacities grouped by country
     vre_grouper = n.generators.loc[gens].bus.map(n.buses.country)
-    vre_grouper_links = n.links.loc[gens_links].bus.map(n.buses.country)
+    vre_grouper_links = n.links.loc[gens_links].bus1.map(n.buses.country)
     #total vre capacities on country buses
     vre_cap_gen = p_nom_gen.loc[gens].groupby(vre_grouper).sum().rename(bus="country")
     vre_cap_link = p_nom_link.loc[gens_links].groupby(vre_grouper_links).sum().rename(bus="country")
@@ -1979,7 +1979,7 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
 
     #grouping by country
     gen_country = n.generators.loc[gens, "bus"].map(n.buses.country).rename("country")
-    gen_country_link = n.links.loc[gens_links, "bus"].map(n.buses.country).rename("country")
+    gen_country_link = n.links.loc[gens_links, "bus1"].map(n.buses.country).rename("country")
     link_country = n.links.loc[electrolysers, "bus0"].map(n.buses.country).rename("country")
 
     vre_gen = p_gen.groupby(gen_country).sum()
@@ -2091,11 +2091,11 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
     electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
 
     gen_country = n.generators.loc[gens, "bus"].map(n.buses.country).rename("country")
-    gen_country_link = n.links.loc[gens_link, "bus"].map(n.buses.country).rename("country")
+    gen_country_link = n.links.loc[gens_link, "bus1"].map(n.buses.country).rename("country")
     link_country = n.links.loc[electrolysers, "bus0"].map(n.buses.country).rename("country")
 
     gen_monthly = p_gen.sel(name=gens).groupby(gen_country).sum().groupby("snapshot.month").sum()
-    link_monthly = p_gen_link.sel(name=gens).groupby(gen_country_link).sum().groupby("snapshot.month").sum()
+    link_monthly = p_gen_link.sel(name=gens_link).groupby(gen_country_link).sum().groupby("snapshot.month").sum()
     vre_monthly = gen_monthly + link_monthly
     print(vre_monthly)
     elec_monthly = p_electrolysers.sel(name=electrolysers).groupby(link_country).sum().groupby("snapshot.month").sum()
@@ -2105,7 +2105,9 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
         set(elec_monthly.coords["country"].values)
     )
     constraints = config["solving"].get("constraints", {})
-    if constraints["activate_vre_share_criterion"]:
+    if investment_year != 2025:
+     if constraints["activate_vre_share_criterion"]:
+      if investment_year != 2025:
        #getting VRE share from previous planning horizon for each country
        countries = n.config["countries"]
        level_vre = constraints["VRE_Share"]
@@ -2118,6 +2120,8 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
          f"Tempral constraint monthly applied to following countries "
          f"not having required VRE share in total generation: "
          f"{', '.join(sorted(active_countries))}")
+     else:
+       active_countries = list(common_countries)
     else:
        active_countries = list(common_countries)
     n.model.add_constraints(

@@ -58,11 +58,11 @@ def rename_techs_tyndp(tech):
         return "battery storage"
     elif tech in [ "biomass boiler", "oil boiler","gas boiler"]:
         return "boilers"
-    elif tech in ["solar", "solar vre"]:
+    elif tech in ["solar PV", "solar vre","solar rooftop","solar-hsat","solar thermal"]:
         return "solar"
     elif tech == "Fischer-Tropsch":
         return "power-to-liquid"
-    elif tech in ["offshore wind", "offwind-ac vre","offwind-dc vre"]:
+    elif tech in ["offshore wind", "offwind-ac vre","offwind-dc vre","offshore wind (AC)","offshore wind (DC)","offshore wind (Float)"]:
         return "offshore wind"
     elif tech in ["onshore wind", "onwind vre"]:
         return "onshore wind"
@@ -631,7 +631,7 @@ def rename_techs_tynd(tech):
                 "hydroelectricity","SMR", "ammonia cracker", "Haber-Bosch", "BioSNG", "biomass to liquid","methanol","ammonia","methanolisation","shipping methanol","non-sequestered HVC","offshore wind (Float)","solar-hsat","water pits",
                 "air heat pump","air-sourced heat pump","ground heat pump","solar PV","solar rooftop", "offshore wind","offshore wind (AC)", "offshore wind (DC)","solid biomass to hydrogen","water pits charger","water pits discharger",
                 "onshore wind", "solar thermal","H2 pipeline", "gas pipeline","gas pipeline new","H2 pipeline retrofitted","transmission lines","Transmission Lines","biomass-to-methanol","industry methanol", "OCGT methanol","CO2 pipeline",
-                "solar Electrolyser","onwind Electrolyser","offwind-ac Electrolyser","offwind-dc Electrolyser","Direct Connected Electrolysers","geothermal"]:
+                "solar vre","onwind vre","offwind-ac vre","offwind-dc vre","vre H2 Electrolysis","geothermal"]:
         return "VOM of Technologies"
     elif tech in ["biomass", "solid biomass", "solid biomass for industry", "biogas", "solid biomass transport", "biomass exports", "biogas exports","solid biomass import","biomass-to-methanol","unsustainable bioliquids","unsustainable solid biomass"]:
           return "Biomass"
@@ -823,12 +823,12 @@ def rename_techs_tyndpp(tech):
         return "distribution network"
     elif tech in [ "CHP", "H2 Fuel Cell","H2 turbine"]:
         return "CHP"
-    elif "solar" in tech:
+    elif tech in ["solar PV","solar rooftop","solar-hsat"]:
         return "solar"
-    elif tech == "Fischer-Tropsch":
-        return "power-to-liquid"
-    elif "offshore wind" in tech:
+    elif tech in ["offshore wind","offshore wind (AC)","offshore wind (DC)","offshore wind (Float)"]:
         return "offshore wind"
+    elif tech in ["onshore wind"]:
+        return "onshore wind"
     elif tech in ["solar vre"]:
         return "solar rfnbo"
     elif tech == "Fischer-Tropsch":
@@ -836,7 +836,7 @@ def rename_techs_tyndpp(tech):
     elif tech in ["offwind-ac vre","offwind-dc vre"]:
         return "offshore rfnbo"
     elif tech in ["onwind vre"]:
-        return "onshore wind rfnbo"
+        return "onshore rfnbo"
     elif tech in ["hot water storage","water pits","water pits charger","water pits discharger"]:
         return "thermal energy storage"
     elif "load" in tech:
@@ -2927,8 +2927,8 @@ def create_capacity_chart(capacities, country, unit='Capacity [GW]'):
     groups = [
         ["solar","solar rfnbo"],
         ["onshore wind", "offshore wind"],
-        ["onshore wind rfnbo", "offshore wind rfnbo"],
-        ["Electrolysers","vre H2 Electrolysis"],
+        ["onshore rfnbo", "offshore rfnbo"],
+        ["Electrolysers","Direct Connected Electrolysers"],
         ["transmission lines"],
         ["nuclear"],
         ["CCGT"],
@@ -2938,8 +2938,8 @@ def create_capacity_chart(capacities, country, unit='Capacity [GW]'):
     groupss = [
         ["solar","solar rfnbo"],
         ["onshore wind", "offshore wind"],
-        ["onshore wind rfnbo", "offshore wind rfnbo"],
-        ["Electrolysers","vre H2 Electrolysis"],
+        ["onshore rfnbo", "offshore rfnbo"],
+        ["Electrolysers","Direct Connected Electrolysers"],
         ["transmission lines"],
         ["power-to-liquid"],
         ["CCGT"],
