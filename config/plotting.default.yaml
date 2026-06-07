@@ -863,3 +863,6 @@ plotting:
     offwind-ac vre: "#c14a09"
     offwind-dc vre: '#ffb07c'
     Direct Connected Electrolysers: '#11875d'
+    solar rfnbo: "#9a0200"
+    onshore rfnbo: "#ffbacd"
+    offshore rfnbo: "#c14a09"

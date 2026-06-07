@@ -1697,8 +1697,7 @@ def add_additionality_constraint(n: pypsa.Network):
     """
     #considering only vre carriers
     generator_types = list(
-        set(config["electricity"]["renewable_carriers"] + ["solar rooftop"])
-        + {"geothermal organic rankine cycle"}
+        set(config["electricity"]["renewable_carriers"] + ["solar rooftop","geothermal organic rankine cycle"])
     )
     #loading corresponding baseline network
     if snakemake.config["run"]["name"].startswith(("RFNBO")):
@@ -1723,9 +1722,9 @@ def add_additionality_constraint(n: pypsa.Network):
     vre_grouper_links = n.links.loc[gens_links].bus1.map(n.buses.country)
     #total vre capacities on country buses
     vre_cap_gen = p_nom_gen.loc[gens].groupby(vre_grouper).sum().rename(bus="country")
-    vre_cap_link = p_nom_link.loc[gens_links].groupby(vre_grouper_links).sum().rename(bus="country")
+    vre_cap_link = p_nom_link.loc[gens_links].groupby(vre_grouper_links).sum().rename(bus1="country")
     vre_cap = vre_cap_gen + vre_cap_link
-    print(vre_cap)
+    
     electrolysers = n.links[
         (n.links.p_nom_extendable == True) & 
         (n.links.carrier == "H2 Electrolysis")
@@ -1746,9 +1745,9 @@ def add_additionality_constraint(n: pypsa.Network):
             (baseline_updated.links.p_nom_extendable == True) & 
             (baseline_updated.links.carrier.isin(generator_types))
     ]
-    rhs_links = baseline_links.groupby(baseline_links.bus.map(baseline_updated.buses.country)).p_nom_opt.sum()
+    rhs_links = baseline_links.groupby(baseline_links.bus1.map(baseline_updated.buses.country)).p_nom_opt.sum()
     rhs = rhs_gens + rhs_links
-    print(rhs)
+    
     rhs.index.name = "country"
 
     #steps to ensure alighnment
@@ -1972,7 +1971,7 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
     gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
     gens_links = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier.isin(generator_types))].index
     p_gen = n.model["Generator-p"].sel(snapshot=sns, name=gens)
-    p_gen_link = n.model["Link-p"].sel(snapshot=sns, name=gens)
+    p_gen_link = n.model["Link-p"].sel(snapshot=sns, name=gens_links)
     
     electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
     p_electrolysers = n.model["Link-p"].sel(snapshot=sns, name=electrolysers)
@@ -1983,11 +1982,11 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
     link_country = n.links.loc[electrolysers, "bus0"].map(n.buses.country).rename("country")
 
     vre_gen = p_gen.groupby(gen_country).sum()
-    print(vre_gen)
+    
     vre_link = p_gen_link.groupby(gen_country_link).sum()
-    print(vre_link)
+    
     vre_total = vre_gen + vre_link
-    print(vre_total)
+    
     electrolysers_total = p_electrolysers.groupby(link_country).sum()
     #allign countries
     common_countries = (
@@ -2097,7 +2096,7 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
     gen_monthly = p_gen.sel(name=gens).groupby(gen_country).sum().groupby("snapshot.month").sum()
     link_monthly = p_gen_link.sel(name=gens_link).groupby(gen_country_link).sum().groupby("snapshot.month").sum()
     vre_monthly = gen_monthly + link_monthly
-    print(vre_monthly)
+    
     elec_monthly = p_electrolysers.sel(name=electrolysers).groupby(link_country).sum().groupby("snapshot.month").sum()
 
     common_countries = list(
