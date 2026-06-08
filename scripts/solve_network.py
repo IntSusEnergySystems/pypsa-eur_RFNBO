@@ -2130,7 +2130,7 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
          f"Tempral constraint monthly applied to following countries "
          f"not having required VRE share in total generation: "
          f"{', '.join(sorted(active_countries))}")
-    else:
+      else:
        active_countries = list(common_countries)
     
     n.model.add_constraints(
