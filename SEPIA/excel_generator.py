@@ -41,6 +41,24 @@ def process_network(cluster, opt, sector_opt, planning_horizon, country):
          Rail_demand = Rail_demand[country].sum()
         else:
          Rail_demand = Rail_demand.sum().sum()
+        if config["run"]["name"] != "baseline_without_H2":
+         if country != 'EU':
+              ammonia_t = industry_demand.loc["ammonia"]
+              ammonia = ammonia_t.filter(like=country).sum()
+         else:
+              ammonia_t = industry_demand.loc["ammonia"]
+              ammonia = ammonia_t.sum().sum()
+        else:
+            ammonia = 0
+
+        collection = []
+        collection.append(
+            pd.Series(
+                dict(label="ammonia", source="H2", target="ammonia for industry", value=ammonia)
+            )
+        )
+
+        collection = pd.concat(collection, axis=1).T
 
         columns = ["label", "source", "target", "value"]
 
@@ -246,7 +264,7 @@ def process_network(cluster, opt, sector_opt, planning_horizon, country):
         # make DAC demand
         df.loc[df.label == "DAC", "target"] = "DAC"
 
-        to_concat = [df, gen, su, sto, load]
+        to_concat = [df, gen, su, sto, load,collection]
         connections = pd.concat(to_concat).sort_index().reset_index(drop=True)
         # aggregation
 
@@ -315,10 +333,10 @@ entries_to_select = ['solar', 'solar rooftop', 'onwind','solar-hsat',
                       'urban decentral biomass boiler_2','FLC Electrolysis_3',
                       'rural gas boiler_2','Haber-Bosch_3','vre H2 Electrolysis','vre H2 Electrolysis_2',
                       'rural oil boiler_2','solar vre','onwind vre','offwind-ac vre','offwind-dc vre',
-                      'urban decentral oil boiler_2',
+                      'urban decentral oil boiler_2','biomass-to-methanol_2',
                       'electricity', 'Rail Network', 'urban decentral gas boiler',
                       'rural gas boiler', 'rural oil boiler',
-                      'urban decentral oil boiler',
+                      'urban decentral oil boiler','biomass-to-methanol',
                       'rural ground heat pump', 'rural ground heat pump_2',
                       'urban decentral air heat pump', 'urban decentral air heat pump_2',
                       'rural resistive heater', 'urban decentral resistive heater_2',
@@ -329,7 +347,7 @@ entries_to_select = ['solar', 'solar rooftop', 'onwind','solar-hsat',
                       'gas for industry CC', 'industry electricity',
                       'low-temperature heat for industry', 'H2 for industry', 'naphtha for industry',
                       'H2 for non-energy', 'agriculture machinery oil', 'agriculture electricity',
-                      'EV charger', 'EV charger_2', 'V2G', 'V2G_2','NH3',
+                      'EV charger', 'EV charger_2', 'V2G', 'V2G_2','ammonia',
                       'urban central air heat pump', 'urban central air heat pump_2', 'urban central gas boiler',
                       'urban central gas boiler_2','methanolisation_3',
                       'urban central resistive heater', 'urban central resistive heater_2',
@@ -494,7 +512,7 @@ entry_label_mapping = {
     'EV charger_2': {'label': 'BEV charging losses', 'source': 'TWh', 'target': 'prebevloss'},
     'V2G': {'label': 'vehicle to grid', 'source': 'TWh', 'target': 'prevtg'},
     'V2G_2': {'label': 'vehicle to grid losses', 'source': 'TWh', 'target': 'prevtgloss'},
-    'NH3': {'label': 'hydrogen to ammonia', 'source': 'TWh', 'target': 'prohydclamm'},
+    'ammonia': {'label': 'hydrogen to ammonia', 'source': 'TWh', 'target': 'prohydclamm'},
     'urban central air heat pump': {'label': 'Heat energy output from centralised heat pumps', 'source': 'TWh',
                                     'target': 'prbrchpac'},
     'urban central air heat pump_2': {'label': 'Heat energy output from centralised heat pumps', 'source': 'TWh',
@@ -592,6 +610,8 @@ entry_label_mapping = {
     'waste CHP CC_3': {'label': 'waste CHP CC losses', 'source': 'TWh', 'target': 'dzzz'},
     'electrobiofuels_3': {'label': 'electrobiofuels H2', 'source': 'TWh', 'target': 'probmelcbioh'},
     'H2 pipeline_2': {'label': 'electricity to H2 compression', 'source': 'TWh', 'target': 'preelchhydcomp'},
+    'biomass-to-methanol': {'label': 'biomass-to-methanol', 'source': 'TWh', 'target': 'prebmmeth'},
+    'biomass-to-methanol_2': {'label': 'biomass-to-methanol losses', 'source': 'TWh', 'target': 'prebmmethlos'},
 }
 
 # %%
@@ -1110,12 +1130,12 @@ def prepare_emissions(cluster, opt, sector_opt,planning_horizon, country):
         
         # Solid biomass to liquid
         if country == 'EU':
-            value = -(
-                n.snapshot_weightings.generators @ n.links_t.p1.filter(like="solid biomass biomass to liquid")
+            value = (
+                n.snapshot_weightings.generators @ n.links_t.p0.filter(like="solid biomass biomass to liquid")
                 ).sum()
         else:
-            value = -(
-                    n.snapshot_weightings.generators @ n.links_t.p1.filter(like="solid biomass biomass to liquid")
+            value = (
+                    n.snapshot_weightings.generators @ n.links_t.p0.filter(like="solid biomass biomass to liquid")
                     .filter(like=country)).sum()
         collection.append(
             pd.Series(
@@ -1491,6 +1511,24 @@ def prepare_emissions(cluster, opt, sector_opt,planning_horizon, country):
                 )
             )
         )
+        # biomass to methanol
+        if country == 'EU':
+            value = -(n.snapshot_weightings.generators @ n.links_t.p1.filter(like="biomass-to-methanol")).sum().sum() 
+        else:
+            value = -(n.snapshot_weightings.generators @ n.links_t.p1.filter(like="biomass-to-methanol").filter(
+                like=country)).sum().sum() 
+        collection.append(
+            pd.Series(
+                dict(label="biomass-to-methanol", source="solid biomass", target="methanol",
+                     value=value * float(options.loc[("biomass-to-methanol", "CO2 stored")]))
+            )
+        )
+        collection.append(
+            pd.Series(
+                dict(label="biomass-to-methanol1", source="co2 atmosphere", target="solid biomass",
+                     value=value * float(options.loc[("biomass-to-methanol", "CO2 stored")]))
+            )
+        )
         
         cf = pd.concat(collection, axis=1).T
         cf.value /= 1e6  # Mt
@@ -1575,7 +1613,7 @@ entries_to_select_c = ['process emissions', 'process emissions CC', 'CCGT', 'lig
                        'solid biomass for industry', 'solid biomass for industry_2', 'methanolisation',
                        'gas for industry',
                        'urban decentral biomass boiler', 'urban decentral biomass boiler_2',
-                       'rural biomass boiler',
+                       'rural biomass boiler','biomass-to-methanol','biomass-to-methanol1',
                        'rural biomass boiler_2',
                        'kerosene for aviation', 'agriculture machinery oil emissions', 'land transport oil emissions',
                        'shipping oil emissions','Waste CHP CC',
@@ -1687,6 +1725,8 @@ entry_label_mapping_c = {
     'Waste CHP CC': {'label': 'Waste CHP CC', 'source': 'MtCO2', 'target': 'emmewastestm'},
     'Waste CHP CC1': {'label': 'Waste CHP CC1', 'source': 'MtCO2', 'target': 'emmewastestmatm'},
     'HVC to air': {'label': 'HVC to air', 'source': 'MtCO2', 'target': 'emmehvcatm'},
+    'biomass-to-methanol': {'label': 'biomass-to-methanol', 'source': 'MtCO2', 'target': 'emmbmmet'},
+    'biomass-to-methanol1': {'label': 'biomass-to-methanol', 'source': 'MtCO2', 'target': 'emmbmmetatm'},
 }
 def write_to_excel(cluster, opt, sector_opt, planning_horizons,countries, filename):
     '''

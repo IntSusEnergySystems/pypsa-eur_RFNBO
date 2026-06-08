@@ -279,9 +279,10 @@ def prepare_sepia(countries):
     if country != 'EU':
      for en_code in ['amm','met']:
         values_elec = flows[('elc_se',en_code + '_fe', '')].squeeze().rename_axis(None)
+        values_bm = flows[('enc_pe',en_code + '_fe', '')].squeeze().rename_axis(None)
         flows[('met_fe','per', '')] = values_elec
-        values_exp = other_imports[en_code + '_fe'] - fec_pe[en_code + '_fe'] - values_elec
-        values_imp = fec_pe[en_code + '_fe'] - other_imports[en_code + '_fe'] - values_elec
+        values_exp = other_imports[en_code + '_fe'] - fec_pe[en_code + '_fe'] - values_elec - values_bm
+        values_imp = fec_pe[en_code + '_fe'] - other_imports[en_code + '_fe'] - values_elec - values_bm
         values_imp = values_imp.clip(lower=0)
         values_exp = values_exp.clip(lower=0)
         flows[('imp',en_code + '_fe', '')] = values_imp
@@ -364,11 +365,11 @@ def prepare_sepia(countries):
     tot_emm = flows_co2.columns.get_level_values('Target').isin(GHG_SECTORS)
     tot_emm = flows_co2.loc[:, tot_emm]
     tot_emm = tot_emm.groupby(level='Target', axis=1).sum() 
-    tot_emm_source = flows_co2.columns.get_level_values('Source').isin(GHG_SECTORS)
-    tot_emm_source = flows_co2.loc[:, tot_emm_source]
-    tot_emm_source = tot_emm_source.groupby(level='Source', axis=1).sum()
     for en_code in ['net']:
-        values_atm = tot_emm['atm'] - tot_emm_source['atm']
+        blg_cap = flows_co2[('atm', 'blg' + '_ghg', '')].squeeze().rename_axis(None)
+        blg_cap_cc = flows_co2[('atm', 'blg' + '_ghg', 'cc')].squeeze().rename_axis(None)
+        dac_cap = flows_co2[('atm', 'stm', '')].squeeze().rename_axis(None)
+        values_atm = tot_emm['atm'] - tot_emm['bm_ghg'] - dac_cap - blg_cap - blg_cap_cc
         flows_co2[('atm',en_code + '_ghg',  'net')] = values_atm
     
     filtered_flows = [
