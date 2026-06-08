@@ -216,7 +216,8 @@ def add_solar_potential_constraints(n: pypsa.Network, config: dict) -> None:
         (n.generators.carrier == "solar") & (n.generators.p_nom_extendable)
     ].index
     solar_hsat = n.generators[(n.generators.carrier == "solar-hsat")].index
-    solar_vre = n.generators[(n.generators.carrier == "solar vre")].index
+    if scenario != "baseline_without_H2":
+     solar_vre = n.generators[(n.generators.carrier == "solar vre")].index
     if solar.empty:
         return
 
@@ -227,7 +228,8 @@ def add_solar_potential_constraints(n: pypsa.Network, config: dict) -> None:
         )
 
     ggrouper = n.generators.loc[solar].bus.str[:2]
-    rhs = (
+    if scenario != "baseline_without_H2":
+     rhs = (
         n.generators.loc[solar_today, "p_nom_max"]
         .groupby(n.generators.loc[solar_today].bus.map(n.buses.country))
         .sum()
@@ -239,6 +241,16 @@ def add_solar_potential_constraints(n: pypsa.Network, config: dict) -> None:
         .sum()
         * land_use_factors["solar-hsat"]
     ).clip(lower=0).replace(0, 1)
+    else:
+        rhs = (
+           n.generators.loc[solar_today, "p_nom_max"]
+           .groupby(n.generators.loc[solar_today].bus.map(n.buses.country))
+           .sum()
+           - n.generators.loc[solar_hsat, "p_nom"]
+           .groupby(n.generators.loc[solar_hsat].bus.map(n.buses.country))
+           .sum()
+           * land_use_factors["solar-hsat"]
+       ).clip(lower=0).replace(0, 1)
    
     lhs = (
         (n.model["Generator-p_nom"].rename(rename).loc[solar] * land_use.squeeze())
@@ -2104,8 +2116,7 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
         set(elec_monthly.coords["country"].values)
     )
     constraints = config["solving"].get("constraints", {})
-    if investment_year != 2025:
-     if constraints["activate_vre_share_criterion"]:
+    if constraints["activate_vre_share_criterion"]:
       if investment_year != 2025:
        #getting VRE share from previous planning horizon for each country
        countries = n.config["countries"]
@@ -2119,10 +2130,9 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
          f"Tempral constraint monthly applied to following countries "
          f"not having required VRE share in total generation: "
          f"{', '.join(sorted(active_countries))}")
-     else:
-       active_countries = list(common_countries)
     else:
        active_countries = list(common_countries)
+    
     n.model.add_constraints(
         vre_monthly.sel(country=active_countries)  >= elec_monthly.sel(country=active_countries),
         name="temporal_correlation_monthly"
@@ -2234,8 +2244,9 @@ def extra_functionality(
         ).any():
             add_TES_energy_to_power_ratio_constraints(n)
             add_TES_charger_ratio_constraints(n)
-    if investment_year > 2025:
-     add_onwind_potential_constraints(n, config)
+    if scenario != "baseline_without_H2":
+     if investment_year > 2025:
+      add_onwind_potential_constraints(n, config)
     add_battery_constraints(n)
     add_lossy_bidirectional_link_constraints(n)
     add_pipe_retrofit_constraint(n)
