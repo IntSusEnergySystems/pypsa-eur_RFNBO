@@ -2286,42 +2286,42 @@ def extra_functionality(
         if investment_year != 2025:
          add_co2price_country(n,co2_price_countries,nyears)
     if constraints["additionality"]:
-     if scenario.startswith("RFNBO_CR"):
+     if scenario.startswith("RFNBO_CR") or scenario.startswith("RFNBO_Add"):
       if investment_year >= 2030:
         add_additionality_constraint(n)
-     else:
+     else: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
       if investment_year >= 2035:
         add_additionality_constraint(n)
-    if constraints["interconnected_additionality"]:
+    if constraints["interconnected_additionality"]: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
        if investment_year >= 2035:
         add_additionality_constraint_interconnected(n)
-    if constraints["global_additionality"]:
+    if constraints["global_additionality"]: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
       if investment_year >= 2035:
         add_global_additionality_constraint(n)
     if constraints["temporal_correlation"]:
-     if scenario.startswith("RFNBO_CR"):
+     if scenario.startswith("RFNBO_CR") or scenario.startswith("RFNBO_Temp"):
       if investment_year >= 2030:
         add_temporal_correlation_constraint(n, snapshots)
-     else:
+     else: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
       if investment_year >= 2035:
         add_temporal_correlation_constraint(n, snapshots)
-    if constraints["interconnected_temporal_correlation"]:
+    if constraints["interconnected_temporal_correlation"]: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
        if investment_year >= 2035:
         add_temporal_correlation_interconnected(n, snapshots)
-    if constraints["global_temporal_correlation"]:
+    if constraints["global_temporal_correlation"]: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
       if investment_year >= 2035:
         add_global_temporal_correlation_constraint(n, snapshots)
-    if constraints["temporal_correlation_monthly"]:
-     if scenario.startswith("RFNBO_CR"):
+    if constraints["temporal_correlation_monthly"]: #!!! DON'T FORGET TO KEEP IT ON ALSO FOR CR
+     if scenario.startswith("RFNBO_CR") or scenario.startswith("RFNBO_Temp"):
        if investment_year == 2025:
         add_temporal_correlation_monthly_constraint(n, snapshots)
-     else:
+     else: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
        if investment_year >= 2035:
         add_temporal_correlation_monthly_constraint(n, snapshots)
-    if constraints["global_temporal_correlation_monthly"]:
+    if constraints["global_temporal_correlation_monthly"]: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
        if investment_year >= 2035:
         add_global_temporal_correlation_monthly_constraint(n, snapshots)
-    if constraints["RFNBO_demand_share"]:
+    if constraints["RFNBO_demand_share"]: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
      if investment_year >= 2030:
         add_RFNBO_demand_share_constraint(n)
     if n.params.custom_extra_functionality:
@@ -2531,11 +2531,11 @@ if __name__ == "__main__":
     # Load network
     investment_year = int(snakemake.wildcards.planning_horizons[-4:])
     previous_year = investment_year - 5
-    if scenario.startswith("RFNBO_CR"):
+    if scenario.startswith("RFNBO_CR") or scenario.startswith("RFNBO_Temp") or scenario.startswith("RFNBO_Add"):
         temporal_year = 2025
-    elif config["run"]["name"] == "RFNBO_VAR-A2":
+    elif config["run"]["name"] == "RFNBO_VAR-A2": #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
         temporal_year = 2040 if investment_year <= 2040 else 2030
-    else:
+    else: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
         temporal_year = 2035 if investment_year <= 2035 else 2030
             
     if investment_year >= 2030:
