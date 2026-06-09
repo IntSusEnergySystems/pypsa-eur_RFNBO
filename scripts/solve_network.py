@@ -1979,13 +1979,37 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
     generator_types = list(
          set(config["electricity"]["renewable_carriers"] + ["solar rooftop","geothermal organic rankine cycle"])
      )
-    
-    gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
-    gens_links = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier.isin(generator_types))].index
+    if snakemake.config["run"]["name"].startswith(("RFNBO")):
+        baseline_updated = pypsa.Network(snakemake.input.baseline_updated)
+    else:
+        logger.error("Baseline network not found for RFNBO scenario.")
+        return
+    gens = n.generators[(n.generators.build_year >= target_year) & (n.generators.carrier.isin(generator_types))].index
+    gens_links = n.links[(n.links.build_year >= target_year) & (n.links.carrier.isin(generator_types))].index
     p_gen = n.model["Generator-p"].sel(snapshot=sns, name=gens)
     p_gen_link = n.model["Link-p"].sel(snapshot=sns, name=gens_links)
     
-    electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
+    #Adding baseline without H2 genberation
+    baseline_gens = baseline_updated.generators[
+            (baseline_updated.generators.build_year >= target_year) & 
+            (baseline_updated.generators.carrier.isin(generator_types))
+    ].index
+    baseline_links = baseline_updated.links[
+            (baseline_updated.links.build_year >= target_year) & 
+            (baseline_updated.links.carrier.isin(generator_types))
+    ].index
+    baseline_gen = baseline_updated.generators_t.p.loc[sns, baseline_gens]
+    baseline_link = baseline_updated.links_t.p0.loc[sns, baseline_links]
+    baseline_grouper = baseline_updated.generators.loc[baseline_gens, "bus"].map(baseline_updated.buses.country)
+    baseline_grouper_links = baseline_updated.links.loc[baseline_links, "bus1"].map(baseline_updated.buses.country)
+    baseline_vre = baseline_gen.groupby(baseline_grouper, axis=1).sum()
+    baseline_links_vre = baseline_link.groupby(baseline_grouper_links, axis=1).sum()
+    rhs = baseline_vre + baseline_links_vre
+    rhs_xr = rhs.to_xarray()
+    rhs_xr = rhs_xr.to_array(dim="country")
+    
+    
+    electrolysers = n.links[(n.links.build_year >= target_year) & (n.links.carrier == "H2 Electrolysis")].index
     p_electrolysers = n.model["Link-p"].sel(snapshot=sns, name=electrolysers)
 
     #grouping by country
@@ -1998,12 +2022,12 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
     vre_link = p_gen_link.groupby(gen_country_link).sum()
     
     vre_total = vre_gen + vre_link
-    
     electrolysers_total = p_electrolysers.groupby(link_country).sum()
     #allign countries
     common_countries = (
     set(vre_total.coords["country"].values) & 
-    set(electrolysers_total.coords["country"].values))
+    set(electrolysers_total.coords["country"].values) &
+    set(rhs_xr.country.values))
     
     if constraints["activate_vre_share_criterion"]:
        #getting VRE share from previous planning horizon for each country
@@ -2019,13 +2043,25 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
          f"{', '.join(sorted(active_countries))}")
     else:
        active_countries = list(common_countries)
+    #annual PPA
+    vre_total_annual = vre_total.sum("snapshot")
+    electrolysers_annual = electrolysers_total.sum("snapshot")
+    rhs_annual = rhs_xr.sum("snapshot")
+    
 
     n.model.add_constraints(
-     vre_total.sel(country=active_countries) >= electrolysers_total.sel(country=active_countries),
+     vre_total.sel(country=active_countries) - rhs_xr.sel(country=active_countries) >= electrolysers_total.sel(country=active_countries),
      name="temporal_correlation",
      coords={"snapshot": sns, "country": active_countries})
     
     logger.info("Temporal correlation constraint added.")
+    
+    n.model.add_constraints(
+      vre_total_annual.sel(country=active_countries) - rhs_annual.sel(country=active_countries) >= electrolysers_annual.sel(country=active_countries),
+      name="annual_ppa",
+      coords={"country": active_countries})
+    
+    logger.info("Annual PPA constraint added.")
 
 def add_temporal_correlation_interconnected(n: pypsa.Network, sns: pd.DatetimeIndex):
     """
@@ -2300,7 +2336,7 @@ def extra_functionality(
         add_global_additionality_constraint(n)
     if constraints["temporal_correlation"]:
      if scenario.startswith("RFNBO_CR") or scenario.startswith("RFNBO_Temp"):
-      if investment_year >= 2030:
+      if investment_year >= target_year:
         add_temporal_correlation_constraint(n, snapshots)
      else: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
       if investment_year >= 2035:
@@ -2532,7 +2568,7 @@ if __name__ == "__main__":
     investment_year = int(snakemake.wildcards.planning_horizons[-4:])
     previous_year = investment_year - 5
     if scenario.startswith("RFNBO_CR") or scenario.startswith("RFNBO_Temp") or scenario.startswith("RFNBO_Add"):
-        temporal_year = 2025
+        target_year = 2030
     elif config["run"]["name"] == "RFNBO_VAR-A2": #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
         temporal_year = 2040 if investment_year <= 2040 else 2030
     else: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
