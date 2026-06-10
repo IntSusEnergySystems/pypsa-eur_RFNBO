@@ -289,6 +289,28 @@ additionality constraint. Deferred; to be discussed.
 Note for post-processing: extendable capacities must be read from `p_nom_opt`
 (`p_nom` is 0 for extendable assets).
 
+### 3.4 CRITICAL bug found after the re-run: free energy from dangling links in the no-H₂ counterfactual
+
+Symptom: `baseline_without_H2` capacities *fall* over the horizons (VRE 73 → 49 GW,
+nothing built, flat ~23 €/MWh electricity price) as if there were no demand.
+
+Root cause: `remove_hydrogen_demands()` dropped the H₂/NH₃/methanol **buses** but left
+the links that reference them (`H2 turbine`, `H2 Fuel Cell`, `Sabatier`, `SMR CC`,
+`H2 pipeline`(+retrofitted)) in the network. PyPSA only logs a consistency *warning*
+for links with undefined buses; no nodal balance exists on the missing port, so such a
+link becomes a **free energy source/sink**. Verified on the solved 2040 network: 216 GW
+of phantom `H2 turbine` produced **584 TWh/yr of free, emission-free electricity** (plus
+24 TWh from fuel cells and 195 TWh of free gas from Sabatier), which crowded out all
+real investment. The counterfactual — and therefore the RHS of the additionality and
+temporal constraints, which compare against it — was meaningless from 2030 on.
+
+Fix (committed): after dropping the buses, remove every link touching a removed bus on
+**any** port, plus generators/loads/stores on removed buses. Validated on the broken
+2040 network: exactly the 18 dangling links removed, no dangling references left.
+
+Lesson for the full run: treat PyPSA consistency warnings about undefined buses in the
+solve logs as errors.
+
 ---
 
 ## 4. Workflow / configuration for the final run (all countries, 2H)
