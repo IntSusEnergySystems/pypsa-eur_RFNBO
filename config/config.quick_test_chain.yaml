@@ -113,7 +113,7 @@ co2_budget_national:
     LT: 0.30
     LU: 0.30
     LV: 0.30
-    'NO': 30
+    'NO': 0.30
     PL: 0.30
     PT: 0.30
     SI: 0.30
