@@ -755,7 +755,7 @@ def remove_hydrogen_demands(n: pypsa.Network):
     per_without_efuels = max(0, 1-ft_percentage)
     cols = n.loads.index[
         n.loads.index.str.contains(
-            "kerosene for aviation|shipping oil|agriculture machinery oil|naphtha for industry",
+            "kerosene for aviation|shipping oil|agriculture machinery oil",
             regex=True
         )
     ]
