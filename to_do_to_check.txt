@@ -16,7 +16,7 @@
 
 - Which bio-fuels do we allow in config?
 
-- Which cc techs do we allow in config?
+- Which cc techs do we allow in config? Are the sequestrated volumes realistic?
 
 - Is the total H2 production volume realistic?
 
