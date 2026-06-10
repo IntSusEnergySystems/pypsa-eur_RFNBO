@@ -794,32 +794,12 @@ def remove_hydrogen_demands(n: pypsa.Network):
         gas_without_efuels = max(0, 1 - meth_percentage)
         cols_gas = n.loads.p_set.filter(like="gas for industry").index
         n.loads.loc[cols_gas, "p_set"] *= gas_without_efuels
-    # Removing waste heat produced by H2/molecule technologies from DH demand.
-    ft = -(baseline_network.links_t.p3.filter(like="Fischer-Tropsch"))
-    sb = -(baseline_network.links_t.p3.filter(like="Sabatier"))
-    hb = -(baseline_network.links_t.p3.filter(like="Haber-Bosch"))
-    meth = -(baseline_network.links_t.p4.filter(like="methanolisation"))
-    electr = -(baseline_network.links_t.p2.filter(like="H2 Electrolysis"))
-    fc = -(baseline_network.links_t.p2.filter(like="H2 Fuel Cell"))
-
-    dfs = [ft, sb, hb, meth, electr, fc]
-    total = pd.concat(dfs, axis=1)
-    if total.shape[1]:
-        total.columns = total.columns.astype(str).str.extract(
-            r"^([A-Z]{2}\d+\s\d+)"
-        )[0]
-        total_per_node = total.groupby(level=0, axis=1).sum()
-
-        urban_cols = n.loads_t.p_set.filter(like="urban central heat").columns
-        if len(urban_cols):
-            n.loads_t.p_set.loc[:, urban_cols] = (
-                n.loads_t.p_set.loc[:, urban_cols]
-                - total_per_node.reindex(
-                    columns=urban_cols.astype(str).str.extract(
-                        r"^([A-Z]{2}\d+\s\d+)"
-                    )[0]
-                ).set_axis(urban_cols, axis=1)
-            )
+    # NOTE: district-heating demand is intentionally NOT reduced. Removing the
+    # H2/e-fuel links already removes their waste-heat *supply* to the heat
+    # buses; the end-use heat demand is unchanged in the counterfactual and
+    # must be covered by other heating technologies. (A previous version
+    # subtracted the baseline waste heat from urban central heat loads, which
+    # double-removed ~70 TWh/yr of heat demand.)
     #making all heat sector technologies minimum investmnet according to baseline scenario
     heating_tech_carriers = ["urban central water tanks charger","urban central water tanks discharger",
                               "urban central water pits charger","urban central water pits discharger",
