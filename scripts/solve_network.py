@@ -733,6 +733,17 @@ def remove_hydrogen_demands(n: pypsa.Network):
         n.buses.carrier.isin(buses_to_remove)
     ]
     n.buses = n.buses.drop(removed_buses)
+    # Remove every component still attached to a removed bus on ANY port.
+    # A link whose bus was dropped has no nodal balance on that port and
+    # becomes a free energy source/sink (e.g. H2 turbines generating
+    # electricity from a non-existent H2 bus), silently distorting the solve.
+    port_cols = [c for c in n.links.columns if c.startswith("bus")]
+    dangling = pd.Series(False, index=n.links.index)
+    for c in port_cols:
+        dangling |= n.links[c].isin(removed_buses)
+    n.links = n.links[~dangling]
+    n.generators = n.generators[~n.generators.bus.isin(removed_buses)]
+    n.loads = n.loads[~n.loads.bus.isin(removed_buses)]
     stores_to_remove = [
         "H2 Store",
         "ammonia store",
@@ -740,6 +751,7 @@ def remove_hydrogen_demands(n: pypsa.Network):
     ]
     removed_stores = n.stores.index[
         n.stores.carrier.isin(stores_to_remove)
+        | n.stores.bus.isin(removed_buses)
     ]
     n.stores = n.stores.drop(removed_stores)
     # As all e-fuel technologies have been removed, subtract the baseline Fischer-Tropsch
