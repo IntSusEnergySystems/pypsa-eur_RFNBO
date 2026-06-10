@@ -10,10 +10,12 @@
 - Why do direct couplded electrolysers develop in baseline?
 
 - Is geothermal available for RFNBO?
+(yes, but model doesnot deploy it probably due to high CAPEX)
 
-- Are ror and hydro avalaible for RFNBO?
+- Are ror and hydro avalaible for RFNBO? 
+(in default configuration ror, hydro dams and PHS are not extendable, for baseline yes as they are connected to grid, in RFNBO scenarios, they are not part of additionality and temporal constraint, so they cannot be used for RFNBOs)
 
-- Is grid renewable share correctly defined? Does it include all renewables?
+- Is grid renewable share correctly defined? Does it include all renewables? 
 
 - Which bio-fuels do we allow in config?
     -> specifcally, we don't have any biomass feeding the liquid fuels bus. knowing that aviation bets on it for SAF, we should try to better cover this.
