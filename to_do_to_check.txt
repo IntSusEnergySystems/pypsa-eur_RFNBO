@@ -28,6 +28,8 @@
 
 - How are subsidies handled?
 
+- Are onshore wind potentials realistic? They seem really optimistic.
+
 ########
 # TODO #
 ########
