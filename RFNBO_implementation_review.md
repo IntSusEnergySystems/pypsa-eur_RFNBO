@@ -16,10 +16,12 @@ results or will break variants/full run; **MINOR** = robustness/cosmetic.
 The pipeline runs end-to-end and the constraint machinery is wired correctly (all 18
 horizon solves optimal, constraints injected per horizon, CO₂ duals transferred). However:
 
-1. **The quick test does not actually test the RFNBO constraints.** RFNBO_CR is
-   indistinguishable from baseline (<1 % on every indicator). The additionality
-   constraint has 425–880 GW of slack, and from 2040 the exemption criteria switch all
-   constraints off. The quick test validates plumbing, not policy effects.
+1. **Quick-test discrimination depends on which re-run you look at.** The *first* quick
+   test (pre-fix counterfactual, §3.1–3.3) showed RFNBO_CR ≈ baseline (<1 %). After the
+   dangling-link fix and constraint cohort corrections (§3.4–3.5), RFNBO_CR **does**
+   diverge — e.g. 2030 electrolyser capacity 42 vs 64 GW and sankey “Hydrogen network”
+   137 vs 221 TWh (§3.6). Exemption criteria still switch constraints off from 2040 if
+   re-enabled without fixing C1/C2.
 2. **The grid carbon-intensity used for the exemption criterion is computed wrong**
    (fuel-based CO₂ intensity applied to electric output → emissions underestimated by
    the plant efficiency factor, ~40–60 % for gas, ~60 % for coal).
@@ -351,10 +353,139 @@ Observations:
   *more* electrolyser capacity (156–185 vs 145–164 GW) and more VRE than baseline —
   capacity oversizing to satisfy hour-by-hour matching at lower capacity factors.
 - A cost premium emerges in later horizons (e.g. +4.3 bn €/yr in 2045); 2030 capex+opex
-  is *lower* than baseline because less electrolysis is built (check how the H₂ demand
-  gap is covered in 2030 — likely SMR — when interpreting).
+  is *lower* than baseline because less electrolysis is built. The H₂ shortfall does
+  **not** leave demands unserved — see **§3.6** (fossil-oil backfill into the shared
+  oil pool, not SMR).
 - `co2 payments` rows are populated for the priced scenarios and decline with the
   CO₂-price trajectory, as expected.
+
+### 3.6 Hydrogen network sankey values and demand fulfilment (2030)
+
+Post-solve analysis of the BE+FR quick-test networks (`base_s_2__6H_2030.nc`) to
+explain why the SEPIA sankey shows **221 TWh** of “Hydrogen network” in baseline vs
+**137 TWh** in RFNBO_CR, and how identical exogenous demands are still fully met.
+
+#### 3.6.1 What the sankey node actually measures
+
+In `SEPIA/SEPIA_config.xlsx`, the sankey label **“Hydrogen network”** is the secondary
+energy node `hyd_se`. It is **not** H₂ pipeline transport (~24 TWh BE↔FR in both
+scenarios, ~3.6 GW capacity). For EU 2030, inflow into `hyd_se` is almost entirely
+electrolysis (`elc_se → hyd_se`, indicator `prohyd`) and matches PyPSA H₂ electrolyser
+output exactly:
+
+| Scenario | Sankey `hyd_se` inflow | PyPSA `H2 Electrolysis` p1 |
+|----------|------------------------|----------------------------|
+| baseline | 220.8 TWh | 220.8 TWh |
+| RFNBO_CR | 136.8 TWh | 136.9 TWh |
+
+**Verdict:** not a SEPIA accounting bug — the node size reflects annual electrolytic H₂
+production entering the secondary hydrogen balance, not pipeline throughput.
+
+#### 3.6.2 Why RFNBO_CR produces less hydrogen
+
+Three mechanisms interact at 2030:
+
+1. **RFNBO constraints** (additionality + hourly temporal correlation, active from 2030
+   per §1b) raise the effective cost of electrolysis by forcing new electrolysers to
+   match dedicated additional VRE rather than cheap grid electricity.
+2. **Different CO₂ policy:** baseline uses national CO₂ **budgets**; RFNBO_CR uses CO₂
+   **prices** from baseline duals (~900–1,060 €/t for BE/FR in 2030). The optimiser can
+   pay for more fossil oil instead of building constrained e-fuel capacity.
+3. **Capacity response:** electrolyser capacity falls from **63.6 GW** (baseline) to
+   **42.4 GW** (RFNBO_CR); Belgium's local electrolysis collapses (10.6 → 0.7 TWh) while
+   France remains the main producer (210 → 136 TWh). Sabatier/methanation drops to zero
+   in RFNBO_CR (−7.8 TWh H₂ input).
+
+| H₂ pathway | Baseline | RFNBO_CR | Δ |
+|------------|----------|----------|---|
+| Electrolysis output | 221 TWh | 137 TWh | −84 TWh |
+| Fischer–Tropsch H₂ input | 189 TWh | 107 TWh | −81 TWh |
+| Fischer–Tropsch oil output | 133 TWh | 76 TWh | −57 TWh |
+| Sabatier H₂ input | 7.8 TWh | 0 TWh | −7.8 TWh |
+| Methanolisation / Haber–Bosch | unchanged | unchanged | 0 |
+
+#### 3.6.3 Demands are identical — and fully met
+
+Exogenous `p_set` values are **identical** in both networks. Key EU 2030 demands:
+
+| Demand | Both scenarios |
+|--------|----------------|
+| Land transport oil | 523.7 TWh |
+| Kerosene (aviation) | 100.2 TWh |
+| Shipping oil | 89.8 TWh |
+| Naphtha (industry) | 134.7 TWh |
+| H₂ for shipping | 3.2 TWh |
+| Land transport fuel cell | 3.1 TWh |
+| Gas for industry | 127.7 TWh |
+
+These are **fixed, inelastic loads** — the optimiser must serve them fully.
+
+**Most transport demand is not met by hydrogen directly.** Large oil-product loads sit
+on dedicated oil buses and are supplied via a shared **`EU oil` bus**
+(`spatial.oil.nodes` in `prepare_sector_network.py`). Fischer–Tropsch feeds that pool
+(H₂ → oil); a separate `oil refining` link supplies fossil oil imports. Land transport
+oil is linked from the EU oil bus to the demand bus (`bus0=spatial.oil.nodes`,
+`bus1=spatial.oil.land_transport`). Only the small direct-H₂ loads (~6 TWh total) sit on
+the H₂ bus.
+
+#### 3.6.4 Substitution mechanism: less e-fuels, more fossil oil
+
+Both scenarios deliver **exactly 859 TWh** of oil products to all oil-based loads. What
+changes is the **source mix** into the EU oil bus:
+
+| Source into EU oil bus | Baseline | RFNBO_CR | Change |
+|------------------------|----------|----------|--------|
+| Fossil oil (`oil refining`) | 707 TWh (82%) | 764 TWh (89%) | **+57 TWh** |
+| E-fuels (Fischer–Tropsch) | 133 TWh (15%) | 76 TWh (9%) | **−57 TWh** |
+| Bioliquids | 19 TWh (2%) | 19 TWh (2%) | 0 |
+
+The substitution is almost one-for-one: **−57 TWh e-fuels → +57 TWh fossil oil
+imports**. Road transport (524 TWh), aviation, shipping, and naphtha are all served at
+the same level in both runs.
+
+**Direct H₂ demands (~6 TWh)** are also fully met in both scenarios. RFNBO_CR
+redistributes H₂ geographically: France still produces most H₂; Belgium imports more via
+the retrofitted H₂ pipeline instead of local electrolysis. Pipeline capacity is unchanged;
+only utilisation patterns shift.
+
+#### 3.6.5 Visual summary
+
+```mermaid
+flowchart LR
+    subgraph baseline [Baseline 2030]
+        E1["Electricity 355 TWh"] --> Ely1["Electrolysis 221 TWh"]
+        Ely1 --> FT1["FT e-fuels 133 TWh"]
+        Fossil1["Fossil oil 707 TWh"] --> Oil1["EU oil bus"]
+        FT1 --> Oil1
+        Bio1["Bioliquids 19 TWh"] --> Oil1
+        Oil1 --> Dem1["Fixed oil demands 859 TWh"]
+    end
+
+    subgraph rfnbo [RFNBO_CR 2030]
+        E2["Electricity 220 TWh"] --> Ely2["Electrolysis 137 TWh"]
+        Ely2 --> FT2["FT e-fuels 76 TWh"]
+        Fossil2["Fossil oil 764 TWh"] --> Oil2["EU oil bus"]
+        FT2 --> Oil2
+        Bio2["Bioliquids 19 TWh"] --> Oil2
+        Oil2 --> Dem2["Fixed oil demands 859 TWh"]
+    end
+```
+
+#### 3.6.6 Interpretation notes
+
+1. The sankey “Hydrogen network” drop is **real** (less H₂ produced) but mainly affects
+   the **e-fuel pathway**, not total energy service to consumers.
+2. RFNBO_CR may look **less green on oil products** in this setup: the e-fuel share of
+   the oil pool falls from 15 % to 9 %, replaced by fossil imports.
+3. The comparison **mixes two policy changes**: RFNBO constraints *and* the switch
+   from CO₂ budgets (baseline) to CO₂ prices (RFNBO). To isolate RFNBO effects, run a
+   baseline variant with `co2_price_national: true` and RFNBO constraints off.
+4. The direct-H₂ demand slice (~6 TWh) is too small to explain the 221 vs 137 TWh
+   sankey gap; the difference is almost entirely about **e-fuel supply strategy**.
+5. **SEPIA labelling:** consider renaming `hyd_se` from “Hydrogen network” to
+   “Hydrogen supply” (or similar) to avoid confusion with H₂ pipeline infrastructure.
+   H₂ pipeline transport itself is not currently mapped as a separate sankey flow (only
+   compression electricity via `H2 pipeline_2` → `preelchhydcomp`).
 
 ---
 
@@ -419,7 +550,7 @@ Observations:
 | 8 | Add missing `else` in monthly constraint; replace silent skips with raises | MAJOR | §2 C6/C10 |
 | 9 | Fix RFNBO-share carriers (`H2 for shipping`, Haber-Bosch bus2, vre electrolysers) before enabling | MAJOR | §2 C7 |
 | 10 | Add CO₂-payment line to cost summaries for cross-scenario comparability | MAJOR (reporting) | §3.2-3 |
-| 11 | Run one quick test where constraints actually bind (validation of the mechanism) | MAJOR (validation) | §3.2-5 |
+| 11 | Run one quick test where constraints actually bind (validation of the mechanism) | MAJOR (validation) | §3.2–3.6 |
 | 12 | Update `main.tex` (direct-connection implementation, incremental additionality, annual PPA, hydro decision) | MINOR (docs) | §2 C8/C9 |
 | 13 | Hardening: snapshot weights in sums, bus→country mapping, `groupby(axis=1)`, cached network loads, typos | MINOR | §2.2 |
 | 14 | Consider `max_growth` limits for credible deployment trajectories | suggestion | §3.2-4 |
