@@ -212,6 +212,22 @@ def format_chart(fig, chart_type, main_params):
         title_font_color="#4A4949")
     return fig
 
+# Match the Plotly.js version bundled with the installed plotly Python package.
+# plotly 6+ exports numpy arrays as base64 "bdata", which requires plotly.js >= 2.28.
+def plotly_js_cdn_url():
+    snippet = go.Figure().to_html(full_html=False, include_plotlyjs="cdn")
+    match = re.search(r'src="(https://cdn\.plot\.ly/plotly-[\d.]+\.min\.js)"', snippet)
+    return match.group(1) if match else "https://cdn.plot.ly/plotly-3.4.0.min.js"
+
+def sync_plotly_js_template(template_content):
+    url = plotly_js_cdn_url()
+    return re.sub(
+        r'<script src="https://cdn\.plot\.ly/plotly-[\d.]+\.min\.js"></script>',
+        f'<script src="{url}"></script>',
+        template_content,
+        count=1,
+    )
+
 # Converts Plotly figure into an HTML string
 def chart_to_output(fig):
     return '<div style="height:85%">'+fig.to_html(full_html=False, include_plotlyjs=False, config={'displaylogo': False})+'</div>'

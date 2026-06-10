@@ -35,6 +35,8 @@ import plotly.io as pio
 import gc    
 import pickle
 import numpy as np
+import SEPIA_functions as sf
+import nav_helpers as nh
 
 def rename_techs_tyndp(tech):
     tech = rename_techs(tech)
@@ -3170,10 +3172,17 @@ def create_combined_chart_country(costs,investment_costs, capacities, s_capaciti
         f"<div id='gas_map_plots'><h2>Gas Map Plots</h2>{plot_map_ch4_html}</div>"
     )
     
+    countries_xlsx = os.path.join(current_script_dir, "COUNTRIES.xlsx")
     template_path =  snakemake.input.template
     with open(template_path, "r") as template_file:
-        template_content = template_file.read()
+        template_content = nh.inject_nav_manifest(
+            sf.sync_plotly_js_template(template_file.read()),
+            config,
+            countries_xlsx=countries_xlsx,
+            plots_path=snakemake.input.plots_html,
+        )
         template = Template(template_content)
+    nh.write_nav_manifest_file(config, countries_xlsx=countries_xlsx)
         
     for file_name, main_content in html_sections.items():
       rendered_html = template.render(

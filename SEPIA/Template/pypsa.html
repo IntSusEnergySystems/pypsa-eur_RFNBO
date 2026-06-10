@@ -5,7 +5,8 @@
     <title>Data Viewer</title>
     <link rel="stylesheet" href="https://clever-energy-scenario.eu/wp-content/themes/twentytwenty/style.css">
     <link rel="stylesheet" href="https://clever-energy-scenario.eu/wp-content/themes/clever/style.css">
-    <script src="https://cdn.plot.ly/plotly-2.16.1.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-3.4.0.min.js"></script>
+    <script id="nav-manifest" type="application/json">{{NAV_MANIFEST}}</script>
     <style>
         /* SEPIA style changes */
         #navsticky .menu-item { display: inline-block !important }
@@ -42,7 +43,7 @@
             padding: 4px 8px;
             cursor: pointer; 
             margin: 1px 0;
-            text-decoration: underline; /* Ensure no underline by default */
+            text-decoration: underline;
             font-size: 25px;
         }
         ol, ul {
@@ -50,18 +51,22 @@
             padding: 0;
         }
         .toc li:hover { 
-            text-decoration: underline; /* Add underline on hover */
-            background: none; /* Remove background on hover */
+            text-decoration: underline;
+            background: none;
+        }
+        .toc li.disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            text-decoration: none;
         }
         .encart {
-            margin-bottom: 50px; /* Remove any bottom margin */
+            margin-bottom: 50px;
         }
         #scenario-switch {
-            margin-top: 10px; /* Reduce the top margin */
+            margin-top: 10px;
             margin-bottom: 20px; 
             font-weight: bold;
             text-align: left;
-            /* Explicitly hide the switch */
             display: none;
             font-size: 30px;
             color: black;
@@ -78,10 +83,10 @@
            background: none !important;
         }
         .secondary-toc {
-           margin-left: 30px; /* Moves it slightly to the right */
+           margin-left: 30px;
         }
         .secondary-toc li {
-           font-size: 18px !important; /* Ensures same font size as primary TOC */
+           font-size: 18px !important;
            padding: 1px 8px;
            cursor: pointer;
            text-decoration: underline;
@@ -93,78 +98,230 @@
           background: none;
         }
         .main-title {
-          color: #008080; /* teal blue */
+          color: #008080;
+        }
+        #nav-warning {
+            color: #8a1f1f;
+            font-size: 14px;
+            margin-top: 6px;
+            display: none;
         }
     </style>
     <script>
-    const CATEGORIES = ["demands", "emissions", "costs", "capacities", "fec", "sankeys", "maps", "dispatch_plots"];
+    const NAV = JSON.parse(document.getElementById("nav-manifest").textContent);
+    const CATEGORIES = NAV.categories || [
+        "demands", "emissions", "costs", "capacities", "fec",
+        "sankeys", "maps", "dispatch_plots"
+    ];
 
-    // 1. Get the current state from URL or LocalStorage
-    function getCurrentState() {
+    function getScenarioFromPath() {
+        const parts = window.location.pathname.split("/").filter(Boolean);
+        const idx = parts.lastIndexOf("htmls");
+        if (idx > 0) {
+            return parts[idx - 1];
+        }
+        return null;
+    }
+
+    function parsePageFromFilename(file) {
+        const scenarios = [...(NAV.scenarios || [])].sort((a, b) => b.length - a.length);
+        for (const scenario of scenarios) {
+            const suffix = `_${scenario}.html`;
+            if (!file.endsWith(suffix)) {
+                continue;
+            }
+            const prefix = file.slice(0, -suffix.length);
+            const splitIdx = prefix.indexOf("_");
+            if (splitIdx > 0) {
+                return {
+                    country: prefix.slice(0, splitIdx),
+                    category: prefix.slice(splitIdx + 1),
+                    scenario,
+                };
+            }
+        }
+        return null;
+    }
+
+    function getCurrentPageInfo() {
+        const file = window.location.pathname.split("/").pop().split("?")[0];
+        const fromFilename = parsePageFromFilename(file);
+        if (fromFilename) {
+            return fromFilename;
+        }
+        const scenarioFromPath = getScenarioFromPath();
         const params = new URLSearchParams(window.location.search);
-        
-        // Priority: 1. URL Parameters, 2. LocalStorage, 3. Defaults
-        const country = params.get("c") || localStorage.getItem("selectedCountry") || "EU";
-        const scenario = params.get("s") || localStorage.getItem("selectedScenario") || "baseline";
-        
-        return { country, scenario };
+        return {
+            country: params.get("c") || localStorage.getItem("selectedCountry") || "EU",
+            category: "demands",
+            scenario: scenarioFromPath
+                || params.get("s")
+                || (NAV.scenarios && NAV.scenarios[0])
+                || "baseline",
+        };
     }
 
-    // 2. Build filename with state preserved in URL parameters
-    function buildFileName(country, category, scenario) {
-        // Base filename: EU_demands_baseline.html
-        // We add ?c=...&s=... to force the next page to recognize the state
-        return `${country}_${category}_${scenario}.html?c=${country}&s=${scenario}`;
+    function pagesFor(scenario, country) {
+        return (((NAV.pages || {})[scenario] || {})[country]) || [];
     }
 
-    // 3. Triggered when dropdowns change
+    function allCountries() {
+        const countries = new Set();
+        for (const scenario of Object.keys(NAV.pages || {})) {
+            for (const country of Object.keys(NAV.pages[scenario] || {})) {
+                if ((NAV.pages[scenario][country] || []).length > 0) {
+                    countries.add(country);
+                }
+            }
+        }
+        return [...countries].sort((a, b) => {
+            if (a === "EU") return 1;
+            if (b === "EU") return -1;
+            return a.localeCompare(b);
+        });
+    }
+
+    function resolveNavTarget(country, scenario, category) {
+        const tryCategory = (c, s, cat) => {
+            const pages = pagesFor(s, c);
+            if (pages.includes(cat)) {
+                return { country: c, scenario: s, category: cat };
+            }
+            if (pages.length > 0) {
+                return { country: c, scenario: s, category: pages[0] };
+            }
+            return null;
+        };
+
+        let target = tryCategory(country, scenario, category);
+        if (target) return target;
+
+        for (const cat of CATEGORIES) {
+            target = tryCategory(country, scenario, cat);
+            if (target) return target;
+        }
+
+        for (const scen of (NAV.scenarios || [])) {
+            target = tryCategory(country, scen, category);
+            if (target) return target;
+        }
+
+        for (const scen of Object.keys(NAV.pages || {})) {
+            for (const c of Object.keys(NAV.pages[scen] || {})) {
+                const pages = NAV.pages[scen][c] || [];
+                if (pages.length > 0) {
+                    return { country: c, scenario: scen, category: pages[0] };
+                }
+            }
+        }
+        return null;
+    }
+
+    function buildHref(country, category, scenario) {
+        const file = `${country}_${category}_${scenario}.html`;
+        const query = `?c=${encodeURIComponent(country)}&s=${encodeURIComponent(scenario)}`;
+        const currentScenario = getScenarioFromPath() || getCurrentPageInfo().scenario;
+        if (scenario === currentScenario) {
+            return file + query;
+        }
+        return `../../${scenario}/htmls/${file}${query}`;
+    }
+
+    function formatTitle(cat) {
+        const titleMap = {
+            "demands": "Demands",
+            "emissions": "Emissions",
+            "costs": "Costs",
+            "capacities": "Capacities",
+            "fec": "Energy Consumption",
+            "sankeys": "Sankeys",
+            "maps": "Maps",
+            "dispatch_plots": "Dispatch",
+        };
+        return titleMap[cat] || cat;
+    }
+
+    function populateDropdowns() {
+        const info = getCurrentPageInfo();
+        const countrySelect = document.getElementById("country-select");
+        const scenarioSelect = document.getElementById("scenario-select");
+        countrySelect.innerHTML = "";
+        scenarioSelect.innerHTML = "";
+
+        for (const code of allCountries()) {
+            const opt = document.createElement("option");
+            opt.value = code;
+            opt.textContent = (NAV.countryLabels || {})[code] || code;
+            countrySelect.appendChild(opt);
+        }
+
+        for (const scenario of (NAV.scenarios || [])) {
+            const opt = document.createElement("option");
+            opt.value = scenario;
+            opt.textContent = (NAV.scenarioLabels || {})[scenario] || scenario;
+            scenarioSelect.appendChild(opt);
+        }
+
+        if ([...countrySelect.options].some(o => o.value === info.country)) {
+            countrySelect.value = info.country;
+        } else if (countrySelect.options.length > 0) {
+            countrySelect.value = countrySelect.options[0].value;
+        }
+
+        if ([...scenarioSelect.options].some(o => o.value === info.scenario)) {
+            scenarioSelect.value = info.scenario;
+        } else if (scenarioSelect.options.length > 0) {
+            scenarioSelect.value = scenarioSelect.options[0].value;
+        }
+    }
+
     function updateSelection() {
         const country = document.getElementById("country-select").value;
         const scenario = document.getElementById("scenario-select").value;
-        
-        localStorage.setItem("selectedCountry", country);
-        localStorage.setItem("selectedScenario", scenario);
-        
-        // Determine current category from the filename
-        const currentPath = window.location.pathname.split("/").pop();
-        let currentCat = "demands"; 
+        const current = getCurrentPageInfo();
+        const target = resolveNavTarget(country, scenario, current.category);
+        const warning = document.getElementById("nav-warning");
 
-        for (const cat of CATEGORIES) {
-            // Match exactly _category_ (e.g. _costs_) to avoid partial matches
-            if (currentPath.includes(`_${cat}_`)) {
-                currentCat = cat;
-                break;
-            }
+        if (!target) {
+            warning.style.display = "block";
+            warning.textContent = `No dashboard page found for ${country} / ${scenario}.`;
+            return;
         }
-
-        window.location.href = buildFileName(country, currentCat, scenario);
+        warning.style.display = "none";
+        localStorage.setItem("selectedCountry", target.country);
+        localStorage.setItem("selectedScenario", target.scenario);
+        window.location.href = buildHref(target.country, target.category, target.scenario);
     }
 
     function updateTableOfContents() {
-        const state = getCurrentState();
+        const info = getCurrentPageInfo();
         const tocList = document.getElementById("toc-list");
-        const currentPath = window.location.pathname.split("/").pop();
+        const currentPath = window.location.pathname.split("/").pop().split("?")[0];
+        const available = pagesFor(info.scenario, info.country);
 
         tocList.innerHTML = "";
-        
+
         CATEGORIES.forEach(cat => {
             const listItem = document.createElement("li");
-            const fileName = buildFileName(state.country, cat, state.scenario);
-
             listItem.textContent = formatTitle(cat);
-            
-            // Navigate using the built filename which includes state params
+
+            if (!available.includes(cat)) {
+                listItem.classList.add("disabled");
+                listItem.title = "Not available for this country/scenario";
+                tocList.appendChild(listItem);
+                return;
+            }
+
             listItem.onclick = (e) => {
                 e.preventDefault();
-                window.location.href = fileName;
+                window.location.href = buildHref(info.country, cat, info.scenario);
             };
-            
-            // Strict Active Check
+
             if (currentPath.includes(`_${cat}_`)) {
                 listItem.classList.add("active");
                 const secondaryContainer = document.createElement("div");
                 secondaryContainer.classList.add("secondary-toc");
-                secondaryContainer.innerHTML = "{{TABLE_OF_CONTENTS}}"; 
+                secondaryContainer.innerHTML = "{{TABLE_OF_CONTENTS}}";
                 tocList.appendChild(listItem);
                 tocList.appendChild(secondaryContainer);
             } else {
@@ -173,27 +330,11 @@
         });
     }
 
-    function formatTitle(cat) {
-        const titleMap = {
-            "demands": "Demands", "emissions": "Emissions", "costs": "Costs",
-            "capacities": "Capacities", "fec": "Energy Consumption",
-            "sankeys": "Sankeys", "maps": "Maps", "dispatch_plots": "Dispatch"
-        };
-        return titleMap[cat] || cat;
-    }
-
-    // Initial Load
-    window.addEventListener('DOMContentLoaded', () => {
-        const state = getCurrentState();
-        
-        // Force dropdowns to reflect the state
-        document.getElementById("country-select").value = state.country;
-        document.getElementById("scenario-select").value = state.scenario;
-        
-        // Ensure storage is in sync with URL
-        localStorage.setItem("selectedCountry", state.country);
-        localStorage.setItem("selectedScenario", state.scenario);
-        
+    window.addEventListener("DOMContentLoaded", () => {
+        populateDropdowns();
+        const info = getCurrentPageInfo();
+        localStorage.setItem("selectedCountry", info.country);
+        localStorage.setItem("selectedScenario", info.scenario);
         updateTableOfContents();
     });
     </script>
@@ -203,46 +344,14 @@
     <div id="navsticky">
         <div class="nav-group">
             <span class="nav-label">Select Country:</span>
-            <select id="country-select" onchange="updateSelection()">
-                <option value="AT">Austria</option>
-				<option value="BE">Belgium</option>
-				<option value="BG">Bulgaria</option>
-				<option value="CH">Switzerland</option>
-				<option value="CZ">Czechia</option>
-				<option value="DE">Germany</option>
-				<option value="DK">Denmark</option>
-				<option value="EE">Estonia</option>
-				<option value="ES">Spain</option>
-				<option value="FI">Finland</option>
-				<option value="FR">France</option>
-				<option value="GB">Great Britain</option>
-				<option value="GR">Greece</option>
-				<option value="HR">Crotia</option>
-				<option value="HU">Hungary</option>
-				<option value="IE">Ireland</option>
-				<option value="IT">Italy</option>
-				<option value="LT">Lithuania</option>
-				<option value="LU">Luxembourg</option>
-				<option value="LV">Latvia</option>
-				<option value="NL">Netherlands</option>
-				<option value="NO">Norway</option>
-				<option value="PL">Poland</option>
-				<option value="PT">Portugal</option>
-				<option value="SE">Sweden</option>
-				<option value="SI">Slovenia</option>
-				<option value="SK">Slovakia</option>
-				<option value="RO">Romania</option>
-                <option value="EU">28 countries</option>
-            </select>
+            <select id="country-select" onchange="updateSelection()"></select>
         </div>
 
         <div class="nav-group">
             <span class="nav-label">Select Scenario:</span>
-            <select id="scenario-select" onchange="updateSelection()">
-                <option value="baseline">Baseline</option>
-                <option value="RFNBO_CR">Current Regulation</option>
-            </select>
+            <select id="scenario-select" onchange="updateSelection()"></select>
         </div>
+        <div id="nav-warning"></div>
     </div>
 
     <main id="main" class="site-main main_large">

@@ -652,6 +652,31 @@ def sepia_results_html_path():
     return RESULTS + "htmls/{country}_{section}_{study}.html"
 
 
+def dashboard_html_sections():
+    return ["demands", "costs", "capacities", "dispatch_plots", "maps", "emissions", "sankeys", "fec"]
+
+
+def dashboard_html_outputs():
+    if multi_scenario_enabled():
+        return expand(
+            "results/{run}/htmls/{country}_{section}_{run}.html",
+            run=config["run"]["name"],
+            country=local_countries,
+            section=dashboard_html_sections(),
+        )
+    study = config["run"]["name"]
+    if isinstance(study, list):
+        study = study[0]
+    return expand(
+        f"results/{study}/htmls/{{country}}_{{section}}_{study}.html",
+        country=local_countries,
+        section=dashboard_html_sections(),
+    )
+
+
+ALL_DASHBOARD_HTML = dashboard_html_outputs()
+
+
 def sepia_costs_input(w):
     return per_run_resource(w, "costs_2050_processed.csv")
 
@@ -796,3 +821,18 @@ rule prepare_results:
         "../envs/environment.yaml"
     script:
         "../SEPIA/Pypsa_results.py"
+
+
+rule refresh_dashboard_nav:
+    input:
+        countries="SEPIA/COUNTRIES.xlsx",
+        plots_html="config/plots.yaml",
+        htmlfiles=ALL_DASHBOARD_HTML,
+    output:
+        touch("results/.dashboard_nav_refreshed"),
+    log:
+        "results/logs/refresh_dashboard_nav.log",
+    conda:
+        "../envs/environment.yaml"
+    script:
+        "../SEPIA/refresh_dashboard_nav.py"

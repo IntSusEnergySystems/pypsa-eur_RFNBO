@@ -96,6 +96,15 @@ _sepia_countries = config["countries"].copy()
 if "EU" not in _sepia_countries:
     _sepia_countries.append("EU")
 
+_sepia_html_outputs = expand(
+    RESULTS + "htmls/{country}_{section}_{run}.html",
+    run=run["name"],
+    country=_sepia_countries,
+    section=["demands", "costs", "capacities", "dispatch_plots"],
+)
+
+_dashboard_html_outputs = ALL_DASHBOARD_HTML
+
 rule all:
     default_target: True
     input:
@@ -105,9 +114,12 @@ rule all:
             run=run["name"],
             **config["scenario"],
         ),
-        expand(
-            RESULTS + "htmls/{country}_{section}_{run}.html",
-            run=run["name"],
-            country=_sepia_countries,
-            section=["demands", "costs", "capacities", "dispatch_plots"],
-        ),
+        _sepia_html_outputs,
+
+# SEPIA post-processing only (prepare_sepia → generate_sepia → prepare_results).
+# Use this target after solves are done; do not target prepare_sepia/generate_sepia/
+# prepare_results by rule name — they carry wildcards in multi-scenario mode.
+rule sepia_all:
+    input:
+        _dashboard_html_outputs,
+        "results/.dashboard_nav_refreshed",

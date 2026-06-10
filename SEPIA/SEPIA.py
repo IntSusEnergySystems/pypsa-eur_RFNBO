@@ -10,6 +10,7 @@ __email__ = "adrien.jacob@negawatt.org"
 
 import SEPIA_additional_functions as saf # Custom functions
 import SEPIA_functions as sf # Custom functions
+import nav_helpers as nh
 import pandas as pd # Read/analyse data
 import datetime # For current time
 import logging
@@ -838,7 +839,13 @@ def prepare_sepia(countries):
     # for country in ALL_COUNTRIES:
     template = snakemake.input.template
     with open(template) as f:
-        template_content = f.read()
+        template_content = nh.inject_nav_manifest(
+            sf.sync_plotly_js_template(f.read()),
+            snakemake.config,
+            countries_xlsx=snakemake.input.countries,
+            plots_path=snakemake.input.plots_html,
+        )
+    nh.write_nav_manifest_file(snakemake.config, countries_xlsx=snakemake.input.countries)
     html_output_emissions = template_content  # Create a copy
     for label in html_items_emissions:
      html_output_emissions = html_output_emissions.replace('{{'+label+'}}', html_items_emissions[label])

@@ -200,6 +200,12 @@ snakemake --snakefile Snakefile_quick_test_chain --cores 8 -call
 
 `rule all` builds solved networks and SEPIA HTML dashboards for BE, FR, and EU under `results/{run}/htmls/` (e.g. `results/baseline/htmls/BE_demands_baseline.html`). To skip post-processing, target a single `.nc` file as below.
 
+To rebuild SEPIA HTML only (after solves are already done), use the wildcard-free `sepia_all` target — not `prepare_sepia`, `generate_sepia`, or `prepare_results` (those rules carry `{run}` / `{country}` wildcards and Snakemake will reject them):
+
+```bash
+snakemake --snakefile Snakefile_quick_test_chain --cores 8 -call sepia_all
+```
+
 For the quickest check, solve one horizon for one scenario only:
 
 ```bash
@@ -234,6 +240,7 @@ Per-scenario logs are kept separately for debugging infeasibilities:
 | Solved network | `results/<scenario>/networks/base_s_2__6H_2030.nc` exists |
 | Gurobi optimality | `grep 'Optimal objective' results/<scenario>/logs/base_s_2__6H_2030_solver.log` |
 | Python log | No traceback in `results/<scenario>/logs/base_s_2__6H_2030_python.log` |
+| SEPIA dashboard | `results/<scenario>/htmls/BE_demands_<scenario>.html` exists (36 files per three-scenario chain) |
 
 Quick commands:
 
