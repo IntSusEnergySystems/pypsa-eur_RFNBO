@@ -297,6 +297,29 @@ variables are defined per scenario branch in `__main__`:
 Variant branches (`RFNBO_VAR-A1/A2`) are still marked `TO BE CHECKED & ADAPTED FOR
 VARIANTS` — review before interpreting variant results.
 
+### Endogenous H₂ demand floor (fair comparison with baseline)
+
+Without further constraints, RFNBO scenarios respond to the certification rules partly
+by **producing less e-fuel** and backfilling the shared oil pool with fossil imports,
+which makes baseline–RFNBO comparisons unfair (different renewable service levels).
+
+The flag `solving.constraints.endogenous_H2_demand_floor` (default `true` in all
+`config.RFNBO_*.yaml`, `false` for the baselines) activates a constraint in
+`scripts/solve_network.py` (`add_endogenous_H2_demand_floor_constraint`, active for
+`RFNBO*` runs from 2030): for each endogenous H₂-consuming power-to-X carrier
+(Fischer-Tropsch, Sabatier, methanolisation, Haber-Bosch, …), annual H₂ consumption
+summed over all modelled nodes must be **≥ the solved baseline value at the same
+horizon** (read from `snakemake.input.baseline_network`).
+
+Consumers are discovered **structurally** (any link port on a carrier-`H2` bus with a
+consuming sign convention), so new power-to-fuel technologies are covered automatically;
+pipelines are excluded structurally, and `H2 Fuel Cell` / `H2 turbine`
+(re-electrification = flexibility) and `H2 liquefaction` (driven by the exogenous
+shipping load) are excluded by default
+(`solving.constraints.endogenous_H2_demand_floor_exclude` to override). The floor is
+per-carrier (preserves the product mix) and EU-level (spatial reallocation stays free).
+See `RFNBO_implementation_review.md` §3.7 for design rationale and validation.
+
 ### RFNBO exemption criteria (deferred)
 
 The 90 % renewable-share and 18 gCO₂/MJ grid-intensity exemptions

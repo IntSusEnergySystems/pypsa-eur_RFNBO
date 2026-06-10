@@ -2315,6 +2315,160 @@ def add_global_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd
     
     logger.info("Global monthly temporal correlation constraint added.")
  
+def _link_efficiency_col(port: int) -> str:
+    if port == 0:
+        raise ValueError("port 0 has no efficiency column")
+    return "efficiency" if port == 1 else f"efficiency{port}"
+
+
+def _find_h2_consuming_link_ports(network: pypsa.Network) -> pd.DataFrame:
+    exclude_carriers = constraints.get(
+        "endogenous_H2_demand_floor_exclude",
+        ["H2 Fuel Cell", "H2 turbine", "H2 liquefaction"],
+    )
+    h2_buses = set(network.buses.index[network.buses.carrier == "H2"])
+    bus_cols = sorted(
+        [c for c in network.links.columns if re.match(r"^bus\d+$", c)],
+        key=lambda c: int(c[3:]),
+    )
+
+    on_h2 = pd.DataFrame(
+        {col: network.links[col].isin(h2_buses) for col in bus_cols},
+        index=network.links.index,
+    )
+    single_h2_links = on_h2.sum(axis=1)[lambda s: s == 1].index
+    links = network.links.loc[single_h2_links]
+
+    records = []
+    for col in bus_cols:
+        k = int(col[3:])
+        h2_at_port = links[col].isin(h2_buses)
+        if not h2_at_port.any():
+            continue
+        candidate_links = links.index[h2_at_port]
+        if k == 0:
+            consumers = candidate_links
+        else:
+            eff_col = _link_efficiency_col(k)
+            if eff_col not in links.columns:
+                continue
+            negative_eff = links.loc[candidate_links, eff_col].lt(0)
+            consumers = candidate_links[negative_eff.values]
+        for link in consumers:
+            carrier = links.at[link, "carrier"]
+            if carrier in exclude_carriers:
+                continue
+            records.append({"link": link, "port": k, "carrier": carrier})
+
+    return pd.DataFrame(records, columns=["link", "port", "carrier"])
+
+
+def _baseline_h2_energy_by_carrier(
+    baseline: pypsa.Network, consuming: pd.DataFrame
+) -> pd.Series:
+    weights = baseline.snapshot_weightings.generators
+    carrier_totals: dict[str, float] = {}
+    for carrier, group in consuming.groupby("carrier"):
+        total = 0.0
+        for port, port_group in group.groupby("port"):
+            links = port_group["link"].tolist()
+            p_df = getattr(baseline.links_t, f"p{port}")[links].clip(lower=0)
+            total += float((weights @ p_df).sum())
+        carrier_totals[carrier] = total
+    return pd.Series(carrier_totals)
+
+
+def add_endogenous_H2_demand_floor_constraint(n: pypsa.Network) -> None:
+    """
+    Force RFNBO scenarios to consume at least as much H2 in each endogenous
+    power-to-X pathway as the solved baseline network of the same horizon.
+    """
+    if not snakemake.config["run"]["name"].startswith("RFNBO"):
+        raise RuntimeError(
+            "Endogenous H2 demand floor constraint requires a baseline reference "
+            "and is only meaningful for RFNBO runs; got run name "
+            f"'{snakemake.config['run']['name']}'"
+        )
+
+    exclude_carriers = constraints.get(
+        "endogenous_H2_demand_floor_exclude",
+        # Re-electrification is power-system flexibility, not fuel demand;
+        # liquefaction throughput is fixed by the identical exogenous shipping load.
+        ["H2 Fuel Cell", "H2 turbine", "H2 liquefaction"],
+    )
+    logger.info(
+        "Endogenous H2 demand floor: excluding carriers %s",
+        exclude_carriers,
+    )
+
+    baseline = pypsa.Network(snakemake.input.baseline_network)
+    baseline_consuming = _find_h2_consuming_link_ports(baseline)
+    if baseline_consuming.empty:
+        logger.info(
+            "Endogenous H2 demand floor: no baseline H2 consumers found, skipping"
+        )
+        return
+
+    baseline_by_carrier = _baseline_h2_energy_by_carrier(
+        baseline, baseline_consuming
+    )
+    threshold_mwh = 1.0
+    skipped_carriers = baseline_by_carrier[baseline_by_carrier < threshold_mwh].index.tolist()
+    if skipped_carriers:
+        logger.info(
+            "Endogenous H2 demand floor: skipping near-zero baseline carriers %s",
+            skipped_carriers,
+        )
+    active_carriers = baseline_by_carrier[baseline_by_carrier >= threshold_mwh]
+    if active_carriers.empty:
+        logger.info(
+            "Endogenous H2 demand floor: no carriers above threshold, skipping"
+        )
+        return
+
+    n_consuming = _find_h2_consuming_link_ports(n)
+    weights = n.snapshot_weightings.generators
+    hydrogen_dispatch = n.model["Link-p"]
+
+    for carrier, baseline_value in active_carriers.items():
+        carrier_links = n_consuming[n_consuming["carrier"] == carrier]
+        if carrier_links.empty:
+            raise RuntimeError(
+                f"Endogenous H2 demand floor: baseline has {carrier} demand "
+                f"({baseline_value:.1f} MWh) but no matching links in RFNBO network"
+            )
+
+        lhs_parts = []
+        for port, port_group in carrier_links.groupby("port"):
+            links = port_group["link"].tolist()
+            if port == 0:
+                lhs_parts.append(
+                    (hydrogen_dispatch.loc[:, links] * weights).sum()
+                )
+            else:
+                eff_col = _link_efficiency_col(port)
+                eff = n.links.loc[links, eff_col].abs()
+                lhs_parts.append(
+                    (hydrogen_dispatch.loc[:, links] * eff * weights).sum()
+                )
+        lhs = lhs_parts[0]
+        for part in lhs_parts[1:]:
+            lhs = lhs + part
+
+        safe_carrier = carrier.replace(" ", "_")
+        n.model.add_constraints(
+            lhs >= baseline_value,
+            name=f"endogenous_H2_demand_floor-{safe_carrier}",
+        )
+        logger.info(
+            "Endogenous H2 demand floor: %s >= %.1f TWh (baseline %s, %d links)",
+            carrier,
+            baseline_value / 1e6,
+            investment_year,
+            len(carrier_links),
+        )
+
+
 def add_RFNBO_demand_share_constraint(n: pypsa.Network):
     '''
     This constraint adds RFNBO share in suppying total hydrogen demand on global level
@@ -2488,6 +2642,10 @@ def extra_functionality(
     if constraints["RFNBO_demand_share"]: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
      if investment_year >= 2030:
         add_RFNBO_demand_share_constraint(n)
+    if constraints.get("endogenous_H2_demand_floor", False):
+     if scenario.startswith("RFNBO"):
+      if investment_year >= 2030:
+        add_endogenous_H2_demand_floor_constraint(n)
     if n.params.custom_extra_functionality:
         source_path = n.params.custom_extra_functionality
         assert os.path.exists(source_path), f"{source_path} does not exist"

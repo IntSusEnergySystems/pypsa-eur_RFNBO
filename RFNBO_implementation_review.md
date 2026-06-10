@@ -34,6 +34,11 @@ horizon solves optimal, constraints injected per horizon, CO₂ duals transferre
 5. Known config bugs: Norway 2035 budget typo (`30` instead of `0.30`), cost summaries
    that exclude CO₂-price payments, and the RFNBO-share constraint references
    non-existent carrier names (currently inactive).
+6. **Fair-comparison fix (§3.7):** RFNBO scenarios used to *reduce* endogenous H₂/e-fuel
+   demand instead of complying (fossil-oil backfill, §3.6). An **endogenous H₂ demand
+   floor** now pins each power-to-X pathway to ≥ its baseline level, so RFNBO–baseline
+   deltas measure the certification rules at equal e-fuel service. Validated on the full
+   quick-test chain: floors bind, cost premium +5.9 → +11.8 bn €/yr (2030 → 2050).
 
 ---
 
@@ -51,6 +56,7 @@ The MAJOR items were implemented (one local commit per fix, not pushed). Decisio
 | Norway `'NO': 30` typo | Fixed (`0.30`) in all configs. |
 | Full-run `sector_opts` | Unified to `2H` in all seven per-scenario configs (quick test stays 6H). |
 | CO₂-payment reporting | Implemented: applied per-country prices are stored in `n.meta["co2_prices"]`; post-solve realized payments in `n.meta["co2_payments"]`; `make_summary.py` adds a `co2 payments` metrics row. |
+| Endogenous H₂ demand floor (fair comparison) | **Implemented and validated** (2026-06-10 evening): RFNBO scenarios must consume at least the baseline's H₂ in each endogenous power-to-X pathway, so scenarios are compared at equal e-fuel service. See **§3.7**. |
 
 **On the (non-)bindingness of the temporal-correlation constraint** (user question): the
 capacity-based additionality constraint not binding is expected. The hourly constraint
@@ -487,6 +493,128 @@ flowchart LR
    H₂ pipeline transport itself is not currently mapped as a separate sankey flow (only
    compression electricity via `H2 pipeline_2` → `preelchhydcomp`).
 
+### 3.7 Endogenous H₂ demand floor — fair comparison at equal e-fuel service (2026-06-10, evening)
+
+§3.6 showed that the RFNBO–baseline comparison was confounded: under the RFNBO
+constraints the optimiser simply produced **less** e-fuel (FT 133 → 76 TWh oil at 2030)
+and backfilled the shared oil pool with fossil imports, so the two scenarios delivered a
+different *renewable* energy service. The fix implemented here pins the **endogenous**
+H₂ demand of the RFNBO scenarios to (at least) the baseline level, so that cost and
+system differences measure only the RFNBO certification rules, not a reduced ambition.
+
+#### 3.7.1 Design
+
+New constraint `add_endogenous_H2_demand_floor_constraint` in `scripts/solve_network.py`
+(gated by `solving.constraints.endogenous_H2_demand_floor`, active for `RFNBO*` runs
+from 2030):
+
+> For each endogenous H₂-consuming link carrier \(c\):
+> \[\sum_{\ell \in c}\sum_t w_t \, h_{\ell,t} \;\ge\; D_c^{\text{base}}\]
+> where \(h_{\ell,t}\) is the H₂ withdrawn by link \(\ell\) and \(D_c^{\text{base}}\) is
+> the annual weighted H₂ consumption of carrier \(c\) in the **solved baseline network
+> of the same horizon** (`snakemake.input.baseline_network`).
+
+Deliberate choices (each affects interpretation):
+
+1. **Floor (≥), not equality.** Cannot make the problem infeasible relative to the
+   baseline solution and lets RFNBO scenarios *exceed* baseline e-fuel production where
+   that is optimal (observed in 2040–2050, see below).
+2. **Per carrier, not total H₂.** Preserves the product mix (e-kerosene vs e-methane vs
+   e-methanol vs e-ammonia); a total-H₂ floor would allow substituting cheap pathways
+   for expensive ones.
+3. **EU-level (all modelled nodes), not per country.** The products are delivered into
+   EU-wide pools (EU oil/methanol buses) anyway, spatial reallocation of production is a
+   legitimate response to the RFNBO rules, and the formulation is robust to any
+   `countries` selection.
+4. **Structural discovery, not hard-coded carrier lists.** `_find_h2_consuming_link_ports`
+   scans all link ports (`bus0…busN`) attached to carrier-`H2` buses and classifies a
+   (link, port) as a consumer if port 0 withdraws or port k ≥ 1 has negative
+   `efficiency{k}` (Haber-Bosch, electrobiofuels). Links with two H₂ ports (pipelines)
+   are excluded structurally. Any **new power-to-fuel technology** added to
+   `prepare_sector_network.py` is therefore picked up automatically.
+5. **Exclusions** (configurable via `solving.constraints.endogenous_H2_demand_floor_exclude`,
+   default in code): `H2 Fuel Cell`, `H2 turbine` (re-electrification is power-system
+   *flexibility*, not fuel demand) and `H2 liquefaction` (throughput fixed by the
+   identical exogenous shipping load).
+6. **Reference values from actual baseline dispatch** (`links_t.p{k}` ×
+   `snapshot_weightings.generators`), robust to time-varying efficiencies; carriers with
+   < 1 MWh baseline consumption are skipped with a log line; a carrier present in the
+   baseline but absent from the RFNBO network raises `RuntimeError` (no silent skip,
+   consistent with the C10 policy).
+
+Config plumbing: flag `endogenous_H2_demand_floor` added next to the other RFNBO flags —
+`true` in all `config.RFNBO_*.yaml` and for `RFNBO_CR` in
+`scenarios.quick_test_chain.yaml`; `false` for both baselines and in the quick-test base
+config.
+
+#### 3.7.2 Validation (full quick-test chain re-run, all 6 horizons optimal)
+
+Floors injected per horizon (TWh H₂, from solved baseline dispatch; values verified
+offline against §3.6 before the run — FT 188.75 ≈ the 189 reported there):
+
+| Horizon | Fischer-Tropsch | Haber-Bosch | Sabatier | methanolisation |
+|---------|-----------------|-------------|----------|-----------------|
+| 2030 | 188.7 | 9.3 | 7.8 | 8.5 |
+| 2035 | 336.6 | 9.3 | 7.9 | 17.5 |
+| 2040 | 444.9 | 9.3 | 6.9 | 27.5 |
+| 2045 | 483.8 | 9.3 | 4.5 | 38.5 |
+| 2050 | 329.4 | 9.3 | 32.6 | 48.5 |
+
+Achieved RFNBO_CR consumption: **at the floor (binding)** for almost all carrier/years;
+above it where the optimiser wants more e-fuel — FT +28 TWh (2040), +42 TWh (2045),
+Sabatier +61 TWh (2050). No violations (max numerical slack −0.05 TWh). Additionality
+and temporal-correlation constraints remain active alongside the floor; exogenous loads
+verified identical across scenarios.
+
+Headline 2030 comparison (was §3.6, now with the floor):
+
+| Indicator (2030) | baseline | RFNBO_CR pre-floor | RFNBO_CR **with floor** |
+|------------------|----------|--------------------|--------------------------|
+| Electrolysis output (TWh) | 220.8 | 136.9 | **225.0** |
+| FT H₂ input (TWh) | 188.7 | 107 | **188.7** |
+| Fossil oil into EU oil bus (TWh) | 706.6 | 764 | **706.4** |
+| FT e-fuel into EU oil bus (TWh) | 132.9 | 76 | **132.9** |
+| Electrolyser capacity (GW) | 63.6 | 42.4 | **69.7** |
+| capex+opex (bn €) | 208.6 | 197.2 | **214.5** |
+
+The oil-pool substitution artefact of §3.6.4 is gone: both scenarios now deliver the
+same e-fuel volumes, and RFNBO_CR needs **+6.1 GW** of electrolysers (oversizing for
+hourly matching, CF down) plus ~76 GW more VRE (645 vs 569 GW) to do so.
+
+**The policy-relevant cost premium of the RFNBO rules at equal e-fuel service**
+(capex+opex delta vs baseline; CO₂ payments are transfers and excluded):
+
+| Horizon | 2030 | 2035 | 2040 | 2045 | 2050 |
+|---------|------|------|------|------|------|
+| Δ cost RFNBO_CR − baseline (bn €/yr) | **+5.9** | +7.2 | +10.2 | +10.8 | +11.8 |
+| Electrolyser capacity (GW) RFNBO vs base | 69.7 / 63.6 | 121.1 / 110.6 | 166.4 / 145.2 | 191.5 / 164.3 | 191.5 / 164.3 |
+
+Before the floor, the 2030 "premium" was **negative** (−11.4 bn €) because RFNBO_CR
+simply did less — exactly the unfair comparison this constraint removes.
+
+#### 3.7.3 Interpretation notes and caveats
+
+1. **Spatial reallocation is real and now visible cleanly:** at 2030, BE electrolysis
+   collapses (10.6 → 1.3 TWh) and FR expands (210 → 224 TWh) at identical total
+   service — a genuine RFNBO-rules effect, not a demand artefact.
+2. **Re-electrification rises** (H₂ Fuel Cell 0.2 → 4.4 TWh at 2030). It is excluded
+   from the floor LHS, so it cannot be used to satisfy the floor; it reflects H₂ being
+   used as flexibility under hourly matching. Keep excluded.
+3. The comparison still **mixes CO₂ budgets (baseline) vs CO₂ prices (RFNBO)** —
+   §3.6.6 point 3 still applies; the floor removes the demand confounder only.
+4. The floor requires the **baseline solved at identical wildcards** — already a hard
+   workflow dependency (CO₂ prices), so no new ordering constraint.
+5. With exemption criteria later re-enabled (C1–C3), the floor stays active regardless —
+   it conditions only on the scenario being `RFNBO*` and the horizon ≥ 2030. Decide
+   whether an exempted country-set scenario should also keep the floor (currently: yes,
+   EU-level, so unaffected by per-country exemptions).
+6. During implementation a classification bug was caught in review (`.lt(0).index`
+   returned *all* candidates instead of the negative-efficiency subset, which would have
+   classified H₂-*producing* ports as consumers); fixed before any run. The discovery
+   was validated offline against solved baselines (2030/2050): exactly
+   {FT, Sabatier, methanolisation, Haber-Bosch} found, all myopic build-year instances
+   included, no producers/pipelines/excluded carriers matched.
+
 ---
 
 ## 4. Workflow / configuration for the final run (all countries, 2H)
@@ -554,3 +682,4 @@ flowchart LR
 | 12 | Update `main.tex` (direct-connection implementation, incremental additionality, annual PPA, hydro decision) | MINOR (docs) | §2 C8/C9 |
 | 13 | Hardening: snapshot weights in sums, bus→country mapping, `groupby(axis=1)`, cached network loads, typos | MINOR | §2.2 |
 | 14 | Consider `max_growth` limits for credible deployment trajectories | suggestion | §3.2-4 |
+| 15 | ~~Impose baseline endogenous H₂ demand on RFNBO scenarios (fair comparison)~~ **done** | MAJOR (methodology) | §3.7 |

@@ -1404,6 +1404,7 @@ solving:
     temporal_correlation_monthly: false
     global_temporal_correlation_monthly: false
     RFNBO_demand_share: false
+    endogenous_H2_demand_floor: true
     share:
      2025: 0.2
      2030: 0.3
