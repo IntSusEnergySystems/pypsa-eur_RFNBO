@@ -755,25 +755,34 @@ def remove_hydrogen_demands(n: pypsa.Network):
     agri_oil = (w @ loads_t.filter(like="agriculture machinery oil")).sum().sum()/1e6
     land_oil = (w @ loads_t.filter(like="land transport oil")).sum().sum()/1e6
     naphtha = (w @ loads_t.filter(like="naphtha for industry")).sum().sum()/1e6
+    if not land_oil:
+        land_oil = (
+            w @ baseline_network.loads_t.p_set.filter(like="land transport oil")
+        ).sum().sum() / 1e6
     oil_demands = aviation + ship_oil + agri_oil + land_oil + naphtha
     ft_percentage = ft / oil_demands if oil_demands else 0
     per_without_efuels = max(0, 1 - ft_percentage)
-    cols = n.loads.index[
+    static_oil_cols = n.loads.index[
         n.loads.index.str.contains(
             "kerosene for aviation|shipping oil|agriculture machinery oil|"
-            "land transport oil|naphtha for industry",
+            "naphtha for industry",
             regex=True,
         )
     ]
-    n.loads.loc[cols, "p_set"] *= per_without_efuels
-    #removing efuels produced by methanation from gas for industry demands
+    n.loads.loc[static_oil_cols, "p_set"] *= per_without_efuels
+    land_transport_cols = n.loads_t.p_set.filter(like="land transport oil").columns
+    if len(land_transport_cols):
+        n.loads_t.p_set.loc[:, land_transport_cols] *= per_without_efuels
+    # Removing e-fuels produced by methanation from gas-for-industry demands.
+    # Skip when the baseline reference has no dispatch (e.g. failed 2050 solve).
     methanation = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p1.filter(like="Sabatier")).sum().sum()/1e6
     gas_ind = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="gas for industry")).sum().sum()/1e6
-    meth_percentage = (methanation / gas_ind)
-    gas_without_efuels = 1-meth_percentage
-    cols_gas = n.loads.p_set.filter(like="gas for industry").index
-    n.loads.loc[cols_gas, "p_set"] *= gas_without_efuels
-    #removing waste heat produced by H2/molecule technlogies from DH demand
+    if gas_ind:
+        meth_percentage = methanation / gas_ind
+        gas_without_efuels = max(0, 1 - meth_percentage)
+        cols_gas = n.loads.p_set.filter(like="gas for industry").index
+        n.loads.loc[cols_gas, "p_set"] *= gas_without_efuels
+    # Removing waste heat produced by H2/molecule technologies from DH demand.
     ft = -(baseline_network.links_t.p3.filter(like="Fischer-Tropsch"))
     sb = -(baseline_network.links_t.p3.filter(like="Sabatier"))
     hb = -(baseline_network.links_t.p3.filter(like="Haber-Bosch"))
@@ -782,18 +791,23 @@ def remove_hydrogen_demands(n: pypsa.Network):
     fc = -(baseline_network.links_t.p2.filter(like="H2 Fuel Cell"))
 
     dfs = [ft, sb, hb, meth, electr, fc]
-    #combine all technologies
     total = pd.concat(dfs, axis=1)
-    total.columns = total.columns.str.extract(r'^([A-Z]{2}\d+\s\d+)')[0]
-    total_per_node = total.groupby(level=0, axis=1).sum()
+    if total.shape[1]:
+        total.columns = total.columns.astype(str).str.extract(
+            r"^([A-Z]{2}\d+\s\d+)"
+        )[0]
+        total_per_node = total.groupby(level=0, axis=1).sum()
 
-    urban_cols = n.loads_t.p_set.filter(like="urban central heat").columns
-    n.loads_t.p_set.loc[:, urban_cols] = (
-        n.loads_t.p_set.loc[:, urban_cols]
-        - total_per_node.reindex(
-            columns=urban_cols.str.extract(r'^([A-Z]{2}\d+\s\d+)')[0]
-        ).set_axis(urban_cols, axis=1)
-    )
+        urban_cols = n.loads_t.p_set.filter(like="urban central heat").columns
+        if len(urban_cols):
+            n.loads_t.p_set.loc[:, urban_cols] = (
+                n.loads_t.p_set.loc[:, urban_cols]
+                - total_per_node.reindex(
+                    columns=urban_cols.astype(str).str.extract(
+                        r"^([A-Z]{2}\d+\s\d+)"
+                    )[0]
+                ).set_axis(urban_cols, axis=1)
+            )
     #making all heat sector technologies minimum investmnet according to baseline scenario
     heating_tech_carriers = ["urban central water tanks charger","urban central water tanks discharger",
                               "urban central water pits charger","urban central water pits discharger",
@@ -2155,9 +2169,8 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
     gen_monthly = p_gen.sel(name=gens).groupby(gen_country).sum().groupby("snapshot.month").sum()
     link_monthly = p_gen_link.sel(name=gens_link).groupby(gen_country_link).sum().groupby("snapshot.month").sum()
     vre_monthly = gen_monthly + link_monthly
-    print(vre_monthly)
+
     elec_monthly = p_electrolysers.sel(name=electrolysers).groupby(link_country).sum().groupby("snapshot.month").sum()
-    print(elec_monthly)
     baseline_gens = baseline_updated.generators[
         (baseline_updated.generators.build_year >= monthly_year) & 
         (baseline_updated.generators.carrier.isin(generator_types))
@@ -2174,12 +2187,10 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
     baseline_links_vre = baseline_link.groupby(baseline_grouper_links, axis=1).sum()
     baseline_vre = baseline_p.groupby(baseline_country, axis=1).sum()
     rhs = baseline_vre + baseline_links_vre
-    print(rhs)
     rhs_monthly = rhs.groupby(rhs.index.month).sum()
     rhs_monthly.index.name = "month"
     rhs_monthly.columns.name = "country"
     rhs_xr = rhs_monthly.to_xarray().to_array(dim="country")
-    print(rhs_xr)
     common_countries = list(
         set(vre_monthly.coords["country"].values) & 
         set(elec_monthly.coords["country"].values) &

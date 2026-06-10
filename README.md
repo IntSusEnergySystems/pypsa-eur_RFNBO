@@ -58,11 +58,13 @@ RFNBO scenarios **depend on solved baseline results**. The solve rule in `rules/
 
 ### `baseline_without_H2` — oil demand adjustment
 
-For horizons after 2025, `scripts/solve_network.py` (`remove_hydrogen_demands`) strips H₂ and e-fuel infrastructure and rescales oil-product loads using the solved **baseline** network: each load is multiplied by `1 − FT / Σ(oil loads)`, where FT is total Fischer–Tropsch output and the denominator sums aviation kerosene, shipping oil, agriculture oil, **land transport oil**, and **naphtha for industry**.
+For horizons after 2025, `scripts/solve_network.py` (`remove_hydrogen_demands`) strips H₂ and e-fuel infrastructure and rescales oil-product loads using the solved **baseline** network: each load is multiplied by `1 − FT / Σ(oil loads)`, where FT is total Fischer–Tropsch output and the denominator sums aviation kerosene, shipping oil, agriculture oil, **land transport oil**, and **naphtha for industry**. Static `p_set` is scaled for aviation, shipping, agriculture, and naphtha; **land transport oil** demand is carried in `loads_t.p_set` and scaled there separately (merged with the upstream fix in `c28ed22a`).
 
 This fixes an infeasibility that appeared from 2035 onward when the old formula used only aviation + shipping + agriculture in the denominator. Baseline FT then exceeded that subset (much of the e-fuel goes to road transport), producing a **negative** scale factor and negative `p_set` on shipping-oil loads.
 
 **Caveat:** the adjustment is still a **single global ratio** applied to all listed oil loads. It does not trace per-sector e-fuel shares from the baseline (nor biomass-to-liquid or other non-FT e-fuels). Sector-level attribution or prepare-time network building would be more accurate; see discussion in the project issue history / agent notes if you need to refine the counterfactual.
+
+If the reference **baseline** solve for a horizon fails to produce dispatch time series (observed for **2050** with Gurobi “numerical trouble”), `remove_hydrogen_demands` skips methanation and waste-heat adjustments that depend on `links_t` / `loads_t` and leaves static loads unchanged for those steps.
 
 ## Repository Structure
 
