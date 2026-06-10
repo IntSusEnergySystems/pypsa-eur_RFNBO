@@ -80,6 +80,8 @@ If the reference **baseline** solve for a horizon fails to produce dispatch time
 ├── Snakefile_RFNBO_VAR-A2        # RFNBO variant A2
 ├── Snakefile_master              # Legacy orchestrator (references missing Snakefile_RFNBO)
 ├── config/
+│   ├── config.quick_test_chain.yaml   # BE+FR quick test (multi-scenario)
+│   ├── scenarios.quick_test_chain.yaml
 │   ├── config.baseline.yaml
 │   ├── config.baseline_without_H2.yaml
 │   ├── config.RFNBO_*.yaml
@@ -175,29 +177,16 @@ Wildcards must match the active `scenario` settings in the config file.
 
 The full European model is slow. For a fast local smoke test, restrict the model to **France and Belgium** at **6-hourly** resolution.
 
-### 1. Configure scenario files
+### 1. Quick-test configuration
 
-Use [`configure_quick_test.sh`](configure_quick_test.sh) to patch `countries`, `scenario.clusters` (set to the number of countries), `scenario.sector_opts`, `gurobi-default` thread count, and `solving.mem_mb` in all scenario configs (baseline + RFNBO variants). No other settings are changed.
+[`Snakefile_quick_test_chain`](Snakefile_quick_test_chain) reads only:
 
-```bash
-./configure_quick_test.sh
-```
+- [`config/config.quick_test_chain.yaml`](config/config.quick_test_chain.yaml) — countries, `scenario.clusters`, `scenario.sector_opts`, solver settings, `solving.mem_mb`, and multi-scenario `run.name`
+- [`config/scenarios.quick_test_chain.yaml`](config/scenarios.quick_test_chain.yaml) — per-scenario constraint overrides (CO₂ policy, RFNBO criteria)
 
-Defaults: `BE` and `FR` (2 clusters), resolution `6H`, Gurobi threads `8`, solve memory `90` GB. Override with:
+The individual scenario configs (`config.baseline.yaml`, `config.RFNBO_*.yaml`, …) are **not** used by the quick-test chain and can stay at full-model defaults (33 clusters, full country list).
 
-```bash
-./configure_quick_test.sh --countries BE,FR --resolution 6H
-./configure_quick_test.sh --countries "BE FR" --resolution 24H --mem-gb 90
-```
-
-The script updates:
-
-- `config/config.quick_test_chain.yaml` (unified multi-scenario config)
-- `config/config.baseline.yaml`
-- `config/config.baseline_without_H2.yaml`
-- `config/config.RFNBO_*.yaml`
-
-> **Important — `clusters` and `sector_opts` must match across scenarios.** RFNBO solves read baseline networks whose filenames embed both wildcards (e.g. `base_s_2__6H_2030.nc`). The repository ships with 33 clusters and mixed resolutions (`6H` for `baseline` and VAR-A variants, `3H` for `baseline_without_H2`, CR, Temp, Add). Run `configure_quick_test.sh` before testing so all scenarios share the same country set, cluster count, and resolution.
+Shipped quick-test defaults: **BE** and **FR**, **2** clusters, **`6H`** resolution, Gurobi **8** threads, solve memory **90** GB (`mem_mb: 90000`). To change countries, resolution, or memory, edit `config/config.quick_test_chain.yaml` directly. Keep `scenario.clusters` equal to the number of countries so result paths stay consistent (e.g. `base_s_2__6H_2030.nc`).
 
 ### 2. Run the test chain (recommended — single Snakemake)
 
@@ -209,8 +198,6 @@ conda activate pypsa-eur
 snakemake --snakefile Snakefile_quick_test_chain --cores 8 -call
 ```
 
-Scenario-specific constraint overrides live in [`config/scenarios.quick_test_chain.yaml`](config/scenarios.quick_test_chain.yaml). The base settings are in [`config/config.quick_test_chain.yaml`](config/config.quick_test_chain.yaml).
-
 For the quickest check, solve one horizon for one scenario only:
 
 ```bash
@@ -218,9 +205,9 @@ snakemake --snakefile Snakefile_quick_test_chain --cores 8 -call \
   results/RFNBO_CR/networks/base_s_2__6H_2030.nc
 ```
 
-### 2b. Run scenarios separately (legacy)
+### 2b. Run scenarios separately (full model)
 
-The individual Snakefiles still work but repeat preprocessing:
+The individual Snakefiles use their own `config/config.<scenario>.yaml` files (27 countries, 33 clusters, etc.) and repeat preprocessing. Do not mix those results with quick-test outputs unless the wildcards match:
 
 ```bash
 snakemake --snakefile Snakefile_baseline --cores 8 -call
@@ -295,13 +282,9 @@ RFNBO configs use `gurobi-default` (8 threads, barrier method). The baseline con
 
 Snakemake uses `solving.mem_mb` (megabytes) to schedule solve jobs. The shipped scenario configs default to `128000` (128 GB). On a machine with less RAM, lower this so jobs are not over-committed.
 
-**Quick test (recommended):** `./configure_quick_test.sh` sets `mem_mb: 90000` (90 GB) in all scenario configs. Override with `--mem-gb N`.
+**Quick test:** `config/config.quick_test_chain.yaml` ships with `mem_mb: 90000` (90 GB). Lower it there if your machine has less RAM.
 
-**Manual edit:** in each `config/config.<scenario>.yaml`, under `solving:`:
-
-```yaml
-  mem_mb: 90000   # 90 GB
-```
+**Full model:** edit `solving.mem_mb` in each `config/config.<scenario>.yaml` (default `128000`).
 
 Sector-coupled solves typically need ≥ 32 GB for a two-country test and ≥ 64 GB for the full model. Check actual usage in `results/<scenario>/logs/<network>_memory.log`.
 

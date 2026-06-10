@@ -775,8 +775,8 @@ def remove_hydrogen_demands(n: pypsa.Network):
         n.loads_t.p_set.loc[:, land_transport_cols] *= per_without_efuels
     # Removing e-fuels produced by methanation from gas-for-industry demands.
     # Skip when the baseline reference has no dispatch (e.g. failed 2050 solve).
-    methanation = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p1.filter(like="Sabatier")).sum().sum()/1e6
-    gas_ind = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="gas for industry")).sum().sum()/1e6
+    methanation = -(w @ baseline_network.links_t.p1.filter(like="Sabatier")).sum().sum()/1e6
+    gas_ind = (w @ loads_t.filter(like="gas for industry")).sum().sum()/1e6
     if gas_ind:
         meth_percentage = methanation / gas_ind
         gas_without_efuels = max(0, 1 - meth_percentage)

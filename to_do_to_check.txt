@@ -28,6 +28,10 @@
 
 - How are subsidies handled?
 
+- Are onshore wind potentials realistic? They seem really optimistic.
+
+- Should we apply the RFNBO constraints to all RFNBO technologies (Haber-Bosch, Sabatier, etc.)? In fact, if H2 can remain fossile, why not NH3, etc.?
+
 ########
 # TODO #
 ########
