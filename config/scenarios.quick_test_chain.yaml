@@ -39,8 +39,8 @@ RFNBO_CR:
       co2_budget_nationl: false
       co2_price_national: true
       additionality: true
-      activate_vre_share_criterion: true
-      activate_carbon_intensity_criterion: true
+      activate_vre_share_criterion: false
+      activate_carbon_intensity_criterion: false
       activate_direct_vre_connected_electrolysers: true
       temporal_correlation: true
       temporal_correlation_monthly: true
