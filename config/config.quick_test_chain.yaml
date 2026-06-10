@@ -21,13 +21,16 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: "RFNBO_VAR-A2"
+  name:
+  - baseline
+  - baseline_without_H2
+  - RFNBO_CR
   scenarios:
-    enable: false
-    file: config/scenarios.yaml
+    enable: true
+    file: config/scenarios.quick_test_chain.yaml
   disable_progressbar: false
   shared_resources:
-    policy: false
+    policy: base
     exclude: []
   use_shadow_directory: false
 
@@ -62,7 +65,7 @@ transmission_limit:
     2040: 1.2
     2045: 1.2
     2050: 1.2
-    
+
 co2_budget_national:
   2030:
     AT: 0.45
@@ -1009,9 +1012,9 @@ sector:
   dac: true
   co2_vent: false
   heat_vent:
-    urban central: true
-    urban decentral: true
-    rural: true
+    urban central: false
+    urban decentral: false
+    rural: false
   marginal_cost_heat_vent: 0.02
   allam_cycle_gas: false
   hydrogen_fuel_cell: true
@@ -1357,13 +1360,13 @@ solving:
     EQ: false
     BAU: false
     SAFE: false
-    co2_budget_nationl: false
-    co2_price_national: true
-    additionality: true
-    activate_vre_share_criterion: true
+    co2_budget_nationl: true
+    co2_price_national: false
+    additionality: false
+    activate_vre_share_criterion: false
     VRE_Share: 90 #%
-    activate_carbon_intensity_criterion: true
-    carbon_intensity: 18 #gco2/MJ
+    activate_carbon_intensity_criterion: false
+    carbon_intensity: 18  #gco2/MJ
     activate_direct_vre_connected_electrolysers: true
     oversize_factor:
       solar: 2
@@ -1372,7 +1375,7 @@ solving:
       offwind-dc: 2
     interconnected_additionality: false
     global_additionality: false
-    temporal_correlation: true
+    temporal_correlation: false
     interconnected_temporal_correlation: false
     global_temporal_correlation: false
     temporal_correlation_monthly: false
@@ -1385,7 +1388,6 @@ solving:
      2040: 0.5
      2045: 0.6
      2050: 0.8
-     
   solver:
     name: gurobi
     options: "gurobi-default"

@@ -37,11 +37,11 @@ foresight: myopic
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#scenario
 scenario:
   clusters:
-  - 33
+  - 2
   opts:
   - ""
   sector_opts:
-  - "3H"
+  - "6H"
   planning_horizons:
   - 2025
   - 2030
@@ -52,34 +52,8 @@ scenario:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
 countries:
-- AT
 - BE
-- BG
-- CH
-- CZ
-- DE
-- DK
-- EE
-- ES
-- FI
 - FR
-- GB
-- GR
-- HR
-- HU
-- IE
-- IT
-- LT
-- LU
-- LV
-- NL
-- 'NO'
-- PL
-- PT
-- RO
-- SE
-- SI
-- SK
 
 transmission_limit:
     2025: 1.0
@@ -1499,7 +1473,7 @@ solving:
     atol: 1000000
     rtol: 0.01
   oetc:
-  mem_mb: 128000
+  mem_mb: 90000
   memory_logging_frequency: 5
   runtime: 48h
 

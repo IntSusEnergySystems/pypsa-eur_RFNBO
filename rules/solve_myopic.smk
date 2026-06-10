@@ -9,9 +9,7 @@ rule add_existing_baseyear:
             "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc"
         ),
         powerplants=resources("powerplants_s_{clusters}.csv"),
-        costs=lambda w: resources(
-            f"costs_{config_provider('scenario', 'planning_horizons',0)(w)}_processed.csv"
-        ),
+        costs=input_costs_baseyear,
         cop_profiles=resources("cop_profiles_base_s_{clusters}_{planning_horizons}.nc"),
         existing_heating_distribution=resources(
             "existing_heating_distribution_base_s_{clusters}_{planning_horizons}.csv"
@@ -109,18 +107,10 @@ rule solve_sector_network_myopic:
         network=resources(
             "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}_brownfield.nc"
         ),
-        baseline_network="results/baseline/networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc"
-        if config["run"]["name"] != "baseline"
-        else []
-        ,
-        baseline_updated="results/baseline_without_H2/networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc"
-        if config["run"]["name"].startswith("RFNBO")
-        else []
-        ,
-        co2_totals_name=resources("co2_totals.csv"),
-        costs=lambda w: resources(
-            f"costs_{config_provider('scenario', 'planning_horizons',0)(w)}_processed.csv"
-        ),
+        baseline_network=input_baseline_network,
+        baseline_updated=input_baseline_updated,
+        co2_totals_name=lambda w: per_run_resource(w, "co2_totals.csv"),
+        costs=input_costs_baseyear,
     output:
         network=RESULTS
         + "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc",

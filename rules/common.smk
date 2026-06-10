@@ -202,6 +202,57 @@ def output_model(path_template):
     return _output_model
 
 
+def study_name(w):
+    """Return the active scenario name (supports multi-scenario workflows)."""
+    if config["run"].get("scenarios", {}).get("enable", False):
+        return w.run
+    name = config["run"]["name"]
+    if isinstance(name, list):
+        raise ValueError(
+            "run.name is a list but run.scenarios.enable is false. "
+            "Use a multi-scenario Snakefile or set scenarios.enable to true."
+        )
+    return name
+
+
+def per_run_resource(w, fn):
+    """
+    Resolve a resources/ path for files without Snakemake wildcards in the name.
+
+    With shared_resources.policy=base, path_provider(resources) treats static
+    filenames as shared across scenarios. Per-scenario copies live under
+    resources/{run}/ when scenarios.enable is true.
+    """
+    if config["run"].get("scenarios", {}).get("enable", False):
+        return f"resources/{w.run}/{fn}"
+    return resources(fn)
+
+
+def input_costs_baseyear(w):
+    return per_run_resource(
+        w,
+        f"costs_{config_provider('scenario', 'planning_horizons', 0)(w)}_processed.csv",
+    )
+
+
+def input_baseline_network(w):
+    if study_name(w) == "baseline":
+        return []
+    return (
+        "results/baseline/networks/base_s_{clusters}_{opts}_{sector_opts}_"
+        "{planning_horizons}.nc".format(**dict(w))
+    )
+
+
+def input_baseline_updated(w):
+    if not study_name(w).startswith("RFNBO"):
+        return []
+    return (
+        "results/baseline_without_H2/networks/base_s_{clusters}_{opts}_{sector_opts}_"
+        "{planning_horizons}.nc".format(**dict(w))
+    )
+
+
 def solved_previous_horizon(w):
     planning_horizons = config_provider("scenario", "planning_horizons")(w)
     i = planning_horizons.index(int(w.planning_horizons))

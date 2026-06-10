@@ -2009,13 +2009,14 @@ def add_h2_gas_infrastructure(
         )
 
     h2_caverns = pd.read_csv(h2_cavern_file, index_col=0)
+    available_cavern_types = [t for t in cavern_types if t in h2_caverns.columns]
 
     if (
         not h2_caverns.empty
         and options["hydrogen_underground_storage"]
-        and set(cavern_types).intersection(h2_caverns.columns)
+        and available_cavern_types
     ):
-        h2_caverns = h2_caverns[cavern_types].sum(axis=1)
+        h2_caverns = h2_caverns[available_cavern_types].sum(axis=1)
 
         # only use sites with at least 2 TWh potential
         h2_caverns = h2_caverns[h2_caverns > 2]

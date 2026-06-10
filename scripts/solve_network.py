@@ -742,20 +742,27 @@ def remove_hydrogen_demands(n: pypsa.Network):
         n.stores.carrier.isin(stores_to_remove)
     ]
     n.stores = n.stores.drop(removed_stores)
-    #As all efuels technologies have been removed, now the efuels produced by FT in baseline is removed
-    #from the oil demands, as aviation is only static demand then its assumed that the subtracted aviation
-    #demand is supplied via efuels
+    # As all e-fuel technologies have been removed, subtract the baseline Fischer-Tropsch
+    # share from oil-product loads. Use all major EU-oil consumers in the denominator
+    # (not only aviation/shipping/agriculture) so FT output is not over-attributed when
+    # later horizons route more e-fuels to land transport and naphtha.
     baseline_network = pypsa.Network(snakemake.input.baseline_network)
-    ft = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p1.filter(like="Fischer-Tropsch")).sum().sum()/1e6
-    aviation = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="kerosene for aviation")).sum().sum()/1e6
-    ship_oil = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="shipping oil")).sum().sum()/1e6
-    agri_oil = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="agriculture machinery oil")).sum().sum()/1e6
-    ft_percentage = (ft / (aviation + ship_oil + agri_oil))
-    per_without_efuels = 1-ft_percentage
+    w = baseline_network.snapshot_weightings.generators
+    loads_t = baseline_network.loads_t.p
+    ft = -(w @ baseline_network.links_t.p1.filter(like="Fischer-Tropsch")).sum().sum()/1e6
+    aviation = (w @ loads_t.filter(like="kerosene for aviation")).sum().sum()/1e6
+    ship_oil = (w @ loads_t.filter(like="shipping oil")).sum().sum()/1e6
+    agri_oil = (w @ loads_t.filter(like="agriculture machinery oil")).sum().sum()/1e6
+    land_oil = (w @ loads_t.filter(like="land transport oil")).sum().sum()/1e6
+    naphtha = (w @ loads_t.filter(like="naphtha for industry")).sum().sum()/1e6
+    oil_demands = aviation + ship_oil + agri_oil + land_oil + naphtha
+    ft_percentage = ft / oil_demands if oil_demands else 0
+    per_without_efuels = max(0, 1 - ft_percentage)
     cols = n.loads.index[
         n.loads.index.str.contains(
-            "kerosene for aviation|shipping oil|agriculture machinery oil",
-            regex=True
+            "kerosene for aviation|shipping oil|agriculture machinery oil|"
+            "land transport oil|naphtha for industry",
+            regex=True,
         )
     ]
     n.loads.loc[cols, "p_set"] *= per_without_efuels

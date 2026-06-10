@@ -1,0 +1,104 @@
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
+#
+# SPDX-License-Identifier: MIT
+#
+# Unified workflow for baseline, baseline_without_H2, and RFNBO_CR.
+# Shared electricity preprocessing is built once (run.shared_resources.policy: base).
+# Per-scenario logs are kept under logs/{run}/ and results/{run}/logs/.
+
+from pathlib import Path
+import yaml
+from os.path import normpath, exists, join
+from shutil import copyfile, move, rmtree
+from dotenv import load_dotenv
+from snakemake.utils import min_version
+
+load_dotenv()
+
+min_version("8.11")
+
+from scripts._helpers import (
+    get_rdir,
+    get_scenarios,
+    get_shadow,
+    path_provider,
+    script_path_provider,
+)
+from scripts.lib.validation.config import validate_config
+
+
+configfile: "config/config.quick_test_chain.yaml"
+configfile: "config/plotting.default.yaml"
+
+
+if Path("config/config.yaml").exists():
+
+    configfile: "config/config.yaml"
+
+
+validate_config(config)
+
+run = config["run"]
+scenarios = get_scenarios(run)
+RDIR = get_rdir(run)
+shadow_config = get_shadow(run)
+
+shared_resources = run["shared_resources"]["policy"]
+exclude_from_shared = run["shared_resources"]["exclude"]
+logs = path_provider("logs/", RDIR, shared_resources, exclude_from_shared)
+benchmarks = path_provider("benchmarks/", RDIR, shared_resources, exclude_from_shared)
+resources = path_provider("resources/", RDIR, shared_resources, exclude_from_shared)
+scripts = script_path_provider(Path(workflow.snakefile).parent)
+
+RESULTS = "results/" + RDIR
+
+
+wildcard_constraints:
+    clusters="[0-9]+(m|c)?|all|adm",
+    opts=r"[-+a-zA-Z0-9\.]*",
+    sector_opts=r"[-+a-zA-Z0-9\.\s]*",
+    planning_horizons=r"[0-9]{4}",
+    run="|".join(run["name"]),
+
+
+include: "rules/common.smk"
+
+
+# Data constants
+OSM_DATASET = dataset_version("osm")
+
+
+include: "rules/collect.smk"
+include: "rules/retrieve.smk"
+include: "rules/build_electricity.smk"
+include: "rules/build_sector.smk"
+include: "rules/solve_electricity.smk"
+# postprocess.smk omitted: targets are solved networks only; plot rules do not
+# expand the run wildcard required in multi-scenario mode.
+include: "rules/development.smk"
+
+
+if config["foresight"] == "overnight":
+
+    include: "rules/solve_overnight.smk"
+
+
+if config["foresight"] == "myopic":
+
+    include: "rules/solve_myopic.smk"
+
+
+if config["foresight"] == "perfect":
+
+    include: "rules/solve_perfect.smk"
+
+
+rule all:
+    default_target: True
+    input:
+        expand(
+            RESULTS
+            + "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc",
+            run=run["name"],
+            **config["scenario"],
+        ),
