@@ -264,17 +264,48 @@ linopy 0.7.0 changed how `inf` bounds in PyPSA data structures are translated in
 
 `envs/environment.yaml` specifies `linopy >=0.6.1`. Pin to `linopy =0.6.1` if your environment resolves a newer version. Do not upgrade linopy without verifying the upstream regression has been fixed.
 
-### `sector_opts` mismatch between scenarios
+### `sector_opts` must match across scenarios
 
-As noted above, the shipped configs use different temporal resolutions across scenarios. This is intentional for production runs only if each scenario is solved independently with matching baseline outputs. For any test or cross-scenario comparison, set `sector_opts` to the same value in **all** config files.
+Cross-scenario inputs (baseline CO₂ duals, `baseline_without_H2` reference networks) are resolved at the **current** scenario's `{clusters}_{opts}_{sector_opts}` wildcards, so all scenarios must use the same temporal resolution. The full-run configs are now unified at **`2H`** (`scenario.sector_opts` in every `config.<scenario>.yaml`); the quick-test chain stays at `6H`. Do not mix resolutions.
 
 ### H₂ underground storage (salt caverns)
 
 Small country subsets (e.g. the BE/FR quick test) can produce a salt-cavern CSV with only some of the configured location types (`onshore`, `nearshore`). Upstream PyPSA-Eur then crashes with `KeyError: "['nearshore'] not in index"` because it checks for any matching column but selects all configured types. This repo patches `scripts/prepare_sector_network.py` to sum only columns that exist. Full-Europe runs are unaffected (both types are present).
 
-### RFNBO constraint activation years
+### RFNBO constraint activation and cohort years
 
-Constraint activation depends on the scenario name in `scripts/solve_network.py`. For example, `RFNBO_CR` and `RFNBO_Add` activate additionality from 2030, while other variants may wait until 2035. Several branches are marked `TO BE CHECKED & ADAPTED FOR VARIANTS` in the source — review before interpreting variant results.
+Constraint behaviour depends on the scenario name in `scripts/solve_network.py`. Three
+variables are defined per scenario branch in `__main__`:
+
+- `temporal_year` — asset cohort for the hourly temporal-correlation constraint
+  (generators/electrolysers with `build_year >= temporal_year`). For
+  `RFNBO_CR`/`RFNBO_Temp`/`RFNBO_Add` this is **2025** (grandfathering applies to
+  additionality, not temporal correlation).
+- `target_year` — first planning horizon where the hourly constraint is active
+  (**2030** for CR/Temp/Add).
+- `monthly_year` — cohort for the monthly correlation constraint, which is applied
+  **only at the 2025 horizon** for CR/Temp (the delegated act allows monthly matching
+  until end-2029; hourly applies from 2030).
+
+Variant branches (`RFNBO_VAR-A1/A2`) are still marked `TO BE CHECKED & ADAPTED FOR
+VARIANTS` — review before interpreting variant results.
+
+### RFNBO exemption criteria (deferred)
+
+The 90 % renewable-share and 18 gCO₂/MJ grid-intensity exemptions
+(`activate_vre_share_criterion`, `activate_carbon_intensity_criterion`) are **disabled**
+in the quick-test chain: the computation in `get_vre_share_carbon_intensity()` has known
+bugs (fuel- vs electricity-based CO₂ intensity, circular renewable-share definition) —
+see `RFNBO_implementation_review.md`. Until fixed, additionality and temporal
+correlation apply to all modelled countries in all active horizons.
+
+### CO₂ payments in cost summaries
+
+For scenarios with `co2_price_national`, the applied per-country prices and the realized
+payments are stored in the solved network's `meta` (`co2_prices`, `co2_payments`), and
+`metrics.csv` includes `co2 payments` and `total costs incl co2 payments` rows. Use the
+latter when comparing system costs across scenarios (plain `total costs` excludes the
+CO₂ bill).
 
 ### Gurobi solver settings
 
