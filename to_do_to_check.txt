@@ -32,6 +32,8 @@
 
 - Should we apply the RFNBO constraints to all RFNBO technologies (Haber-Bosch, Sabatier, etc.)? In fact, if H2 can remain fossile, why not NH3, etc.?
 
+- baseline_without_H2 does not reach neutrality in 2050 when using CO2 price, despite lower demand (e.g. FR still has ~40Mt). how does this affect our results? is relevant to look at this, or should we focus first on RFNBO cases?
+
 ########
 # TODO #
 ########
