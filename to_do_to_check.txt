@@ -1,0 +1,41 @@
+############
+# TO CHECK #
+############
+
+- Why lot of methanation/Fischer-Tropsch in baseline 2030/2035?
+    - Could disable CO2 pipelines in < 2040
+    - Could reduce CO2 constraint in 2030
+
+- Why do direct couplded electrolysers develop in baseline?
+
+- Is geothermal available for RFNBO?
+
+- Are ror and hydro avalaible for RFNBO?
+
+- Is grid renewable share correctly defined? Does it include all renewables?
+
+- Which bio-fuels do we allow in config?
+
+- Which cc techs do we allow in config? Are the sequestrated volumes realistic?
+
+- Is the total H2 production volume realistic?
+
+- Are the regulatory variants correctly implemented?
+
+- How about curtailment ("redispatch") situtation?
+
+- How about renewable energy fund?
+
+- How are subsidies handled?
+
+########
+# TODO #
+########
+
+- Assess (quantify) effect of 1h vs 2h resolution
+
+- 
+
+###########
+# REMARKS #
+###########
