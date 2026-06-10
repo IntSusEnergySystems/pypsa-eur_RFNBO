@@ -15,6 +15,7 @@
 - Is grid renewable share correctly defined? Does it include all renewables?
 
 - Which bio-fuels do we allow in config?
+    -> specifcally, we don't have any biomass feeding the liquid fuels bus. knowing that aviation bets on it for SAF, we should try to better cover this.
 
 - Which cc techs do we allow in config? Are the sequestrated volumes realistic?
 
