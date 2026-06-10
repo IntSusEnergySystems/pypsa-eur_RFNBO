@@ -41,7 +41,7 @@ def process_network(cluster, opt, sector_opt, planning_horizon, country):
          Rail_demand = Rail_demand[country].sum()
         else:
          Rail_demand = Rail_demand.sum().sum()
-        if config["run"]["name"] != "baseline_without_H2":
+        if study != "baseline_without_H2":
          if country != 'EU':
               ammonia_t = industry_demand.loc["ammonia"]
               ammonia = ammonia_t.filter(like=country).sum()
@@ -1873,7 +1873,9 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "prepare_sepia")
 
-        
+    from scripts._helpers import set_scenario_config
+
+    set_scenario_config(snakemake)
 
     cluster = snakemake.params.scenario["clusters"][0]
     opt = snakemake.params.scenario["opts"][0]

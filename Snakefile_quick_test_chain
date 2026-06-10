@@ -73,8 +73,7 @@ include: "rules/retrieve.smk"
 include: "rules/build_electricity.smk"
 include: "rules/build_sector.smk"
 include: "rules/solve_electricity.smk"
-# postprocess.smk omitted: targets are solved networks only; plot rules do not
-# expand the run wildcard required in multi-scenario mode.
+include: "rules/postprocess.smk"
 include: "rules/development.smk"
 
 
@@ -93,6 +92,10 @@ if config["foresight"] == "perfect":
     include: "rules/solve_perfect.smk"
 
 
+_sepia_countries = config["countries"].copy()
+if "EU" not in _sepia_countries:
+    _sepia_countries.append("EU")
+
 rule all:
     default_target: True
     input:
@@ -101,4 +104,10 @@ rule all:
             + "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc",
             run=run["name"],
             **config["scenario"],
+        ),
+        expand(
+            RESULTS + "htmls/{country}_{section}_{run}.html",
+            run=run["name"],
+            country=_sepia_countries,
+            section=["demands", "costs", "capacities", "dispatch_plots"],
         ),

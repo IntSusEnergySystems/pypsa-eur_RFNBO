@@ -207,9 +207,9 @@ co2_budget_national:
     SE: 0.0
     SK: 0.0
     RO: 0.0
-    BE: 0.0
+    BE: 0.05
     DE: 0.0
-    FR: 0.0
+    FR: 0.05
     GB: 0.0
     NL: 0.0
 TYNDP_values:
@@ -273,7 +273,7 @@ co2_budget:
   2035: 0.25
   2040: 0.1
   2045: 0.05
-  2050: 0.0
+  2050: 0.05
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#electricity
 electricity:

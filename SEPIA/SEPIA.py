@@ -893,6 +893,9 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "generate_sepia")
 
+    from scripts._helpers import set_scenario_config
+
+    set_scenario_config(snakemake)
     logging.basicConfig(level=snakemake.config["logging"]["level"])
     countries = snakemake.params.countries
     study = snakemake.params.study

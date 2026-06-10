@@ -198,6 +198,8 @@ conda activate pypsa-eur
 snakemake --snakefile Snakefile_quick_test_chain --cores 8 -call
 ```
 
+`rule all` builds solved networks and SEPIA HTML dashboards for BE, FR, and EU under `results/{run}/htmls/` (e.g. `results/baseline/htmls/BE_demands_baseline.html`). To skip post-processing, target a single `.nc` file as below.
+
 For the quickest check, solve one horizon for one scenario only:
 
 ```bash

@@ -3204,7 +3204,11 @@ if __name__ == "__main__":
     if "snakemake" not in globals():
         with open("snakemake_dump.pkl", "rb") as f:
             snakemake = pickle.load(f)
-    
+
+    from scripts._helpers import set_scenario_config
+
+    set_scenario_config(snakemake)
+
     cluster = snakemake.params.scenario["clusters"][0]
     opt = snakemake.params.scenario["opts"][0]
     sector_opt = snakemake.params.scenario["sector_opts"][0]
