@@ -2005,18 +2005,18 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
     else:
         logger.error("Baseline network not found for RFNBO scenario.")
         return
-    gens = n.generators[(n.generators.build_year >= target_year) & (n.generators.carrier.isin(generator_types))].index
-    gens_links = n.links[(n.links.build_year >= target_year) & (n.links.carrier.isin(generator_types))].index
+    gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
+    gens_links = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier.isin(generator_types))].index
     p_gen = n.model["Generator-p"].sel(snapshot=sns, name=gens)
     p_gen_link = n.model["Link-p"].sel(snapshot=sns, name=gens_links)
     
     #Adding baseline without H2 genberation
     baseline_gens = baseline_updated.generators[
-            (baseline_updated.generators.build_year >= target_year) & 
+            (baseline_updated.generators.build_year >= temporal_year) & 
             (baseline_updated.generators.carrier.isin(generator_types))
     ].index
     baseline_links = baseline_updated.links[
-            (baseline_updated.links.build_year >= target_year) & 
+            (baseline_updated.links.build_year >= temporal_year) & 
             (baseline_updated.links.carrier.isin(generator_types))
     ].index
     baseline_gen = baseline_updated.generators_t.p.loc[sns, baseline_gens]
@@ -2030,7 +2030,7 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
     rhs_xr = rhs_xr.to_array(dim="country")
     
     
-    electrolysers = n.links[(n.links.build_year >= target_year) & (n.links.carrier == "H2 Electrolysis")].index
+    electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
     p_electrolysers = n.model["Link-p"].sel(snapshot=sns, name=electrolysers)
 
     #grouping by country
@@ -2613,12 +2613,17 @@ if __name__ == "__main__":
     investment_year = int(snakemake.wildcards.planning_horizons[-4:])
     previous_year = investment_year - 5
     if scenario.startswith("RFNBO_CR") or scenario.startswith("RFNBO_Temp") or scenario.startswith("RFNBO_Add"):
+        temporal_year = 2025
         target_year = 2030
         monthly_year = 2025
     elif config["run"]["name"] == "RFNBO_VAR-A2": #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
         temporal_year = 2040 if investment_year <= 2040 else 2030
+        target_year = 2040
+        monthly_year = 2040
     else: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
         temporal_year = 2035 if investment_year <= 2035 else 2030
+        target_year = 2035
+        monthly_year = 2035
             
     if investment_year >= 2030:
         previous_horizon_data = [get_vre_share_carbon_intensity(country) for country in countries]
