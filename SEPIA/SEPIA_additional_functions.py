@@ -12,6 +12,21 @@ import plotly.graph_objects as go # Plotly figure object
 import plotly.express as px
 import time # For performance measurement
 
+from SEPIA_functions import zero_small_flows
+
+def _year_sankey_nodes(nodes, never_empty_nodes_sorted, new_not_empty_nodes, year_links):
+    year_nodes = pd.concat([never_empty_nodes_sorted, nodes.loc[new_not_empty_nodes]])
+    link_node_names = pd.Index(year_links["Source"]).union(year_links["Target"]).unique()
+    missing_nodes = link_node_names.difference(year_nodes.index)
+    if len(missing_nodes) > 0:
+        extra = nodes.loc[nodes.index.intersection(missing_nodes)]
+        if not extra.empty:
+            year_nodes = pd.concat([year_nodes, extra])
+            year_nodes = year_nodes[~year_nodes.index.duplicated(keep="first")]
+    year_nodes = year_nodes.copy()
+    year_nodes["RowIndex"] = range(len(year_nodes))
+    return year_nodes
+
 ## General functions
 # Show calculation time
 
@@ -110,13 +125,13 @@ def create_ghg_chart(results, NODES, main_params, type="area", title='', xls_wri
 # Sankey
 # Create Sankeys with slider (every 'interval_year' years)
 def create_sankey(flows, nodes, processes, main_params, interval_year=5, title="Sankey diagram"):
-    flows = flows.round(main_params['DECIMALS'])
-    # Hide very small flows
-    flows[flows<1E-4] = 0
+    flows = flows.T.groupby(level=[0, 1, 2]).sum().T
+    flows = zero_small_flows(flows.round(main_params['DECIMALS']))
     # To have transparent links
     nodes['ColorOpacity'] = nodes['Color'].apply(hex_to_rgba, opacity=0.4) 
     # Adding Labels to flows (when defined in processes) and transposing flows for Sankey rendering
     proc_labels = processes.set_index(['Source','Target','Type'])#[['Label']]
+    proc_labels = proc_labels[~proc_labels.index.duplicated(keep='first')]
     links = pd.concat([flows.T, proc_labels], axis=1).reset_index()
 
     fig = go.Figure()
@@ -134,10 +149,10 @@ def create_sankey(flows, nodes, processes, main_params, interval_year=5, title="
         else:
          print(f"Column '{year}' not found in nodes_with_links DataFrame")
         new_not_empty_nodes = new_not_empty_nodes[~new_not_empty_nodes.isin(never_empty_nodes)].to_list()
-        year_nodes = pd.concat([never_empty_nodes_sorted, nodes.loc[new_not_empty_nodes]])
-        year_nodes['RowIndex'] = range(len(year_nodes))
-        # Removing links with 0 flow
         year_links = links.loc[links[str(year)] > 0]
+        year_nodes = _year_sankey_nodes(
+            nodes, never_empty_nodes_sorted, new_not_empty_nodes, year_links
+        )
         pad_value = 3
         sk = go.Sankey(
             valueformat = ".0f",
@@ -191,13 +206,13 @@ def create_sankey(flows, nodes, processes, main_params, interval_year=5, title="
     return fig
 
 def create_carbon_sankey(flows_co2, nodes, processes, main_params, interval_year=5, title="Carbon Sankey diagram"):
-    flows_co2 = flows_co2.round(main_params['DECIMALS'])
-    # Hide very small flows
-    # flows_co2[flows_co2<1E-4] = 0
+    flows_co2 = flows_co2.T.groupby(level=[0, 1, 2]).sum().T
+    flows_co2 = zero_small_flows(flows_co2.round(main_params['DECIMALS']))
     # To have transparent links
     nodes['ColorOpacity'] = nodes['Color'].apply(hex_to_rgba, opacity=0.4) 
     # Adding Labels to flows (when defined in processes) and transposing flows for Sankey rendering
     proc_labels = processes.set_index(['Source','Target','Type'])#[['Label']]
+    proc_labels = proc_labels[~proc_labels.index.duplicated(keep='first')]
     links = pd.concat([flows_co2.T, proc_labels], axis=1).reset_index()
 
     fig = go.Figure()
@@ -215,11 +230,10 @@ def create_carbon_sankey(flows_co2, nodes, processes, main_params, interval_year
         else:
           print(f"Column '{year}' not found in nodes_with_links DataFrame")
         new_not_empty_nodes = new_not_empty_nodes[~new_not_empty_nodes.isin(never_empty_nodes)].to_list()
-        year_nodes = pd.concat([never_empty_nodes_sorted, nodes.loc[new_not_empty_nodes]])
-        year_nodes['RowIndex'] = range(len(year_nodes))
-        # Removing links with 0 flow
         year_links = links.loc[links[str(year)] > 0]
-        year_links = links.loc[links[str(year)] > 0]
+        year_nodes = _year_sankey_nodes(
+            nodes, never_empty_nodes_sorted, new_not_empty_nodes, year_links
+        )
         pad_value = 30
         sk = go.Sankey(
             valueformat = ".0f",

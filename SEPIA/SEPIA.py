@@ -42,7 +42,7 @@ def biomass_potentials():
 
     return df
 
-def prepare_sepia(countries):
+def prepare_sepia(countries, flows_only=False):
  '''This function prepares data from excel files for sepia visulaisation'''
 
  # Import country data
@@ -173,7 +173,7 @@ def prepare_sepia(countries):
     fec_carrier_pe = flows.loc[:, selected_columns_pe]
     grouped_fec_pe = fec_carrier_pe.groupby(level='Source', axis=1).sum()
     fec_pe = grouped_fec_pe
-    for en_code in ['pac','enc','cms']:
+    for en_code in ['enc','cms']:
         flows[(en_code+'_pe',en_code+'_fe','')] = fec_pe[en_code+'_fe']
   
     biogas_p = flows['bgl_pe','gaz_se',''].squeeze().rename_axis(None).clip(lower=0)
@@ -324,6 +324,7 @@ def prepare_sepia(countries):
       agri_heat = flows[(en_code + '_fe','agr', '')].squeeze().rename_axis(None)
       rural = rural_heat - agri_heat
       flows[(en_code + '_fe','res', 'gr')] = rural
+      flows[(en_code + '_pe', en_code + '_fe', '')] = fec_pe[en_code + '_fe'] - agri_heat
     if country != 'EU': 
      for en_code in ['oil']: 
       val_oil_boil = flows_co2[('oil_ghg', 'atm', 'rb')].squeeze().rename_axis(None)
@@ -372,6 +373,24 @@ def prepare_sepia(countries):
         dac_cap = flows_co2[('atm', 'stm', '')].squeeze().rename_axis(None)
         values_atm = tot_emm['atm'] - tot_emm['bm_ghg'] - dac_cap - blg_cap - blg_cap_cc
         flows_co2[('atm',en_code + '_ghg',  'net')] = values_atm
+
+    flows = flows.T.groupby(level=[0, 1, 2]).sum().T.sort_index(axis=1)
+    flows_co2 = flows_co2.T.groupby(level=[0, 1, 2]).sum().T.sort_index(axis=1)
+    for node in SE_NODES + FE_NODES:
+     sf.balance_node(flows, node)
+    carbon_transit = sorted(set(PROCESSES_2['Source']).intersection(PROCESSES_2['Target']) - {'imp', 'exp'})
+    carbon_ports = {
+     'met_ghg': ('hth_ghg', 'eth_ghg'),
+     'gas_ghg': ('fol_ghg', 'stm'),
+     'oil_ghg': ('fol_ghg', 'stm'),
+     'atm': ('fol_ghg', 'net_ghg'),
+     'blg_ghg': ('fol_ghg', 'net_ghg'),
+     'bm_ghg': ('fol_ghg', 'net_ghg'),
+     'stm': ('fol_ghg', 'net_ghg'),
+    }
+    for node in carbon_transit:
+     imp_node, exp_node = carbon_ports.get(node, ('fol_ghg', 'net_ghg'))
+     sf.balance_node(flows_co2, node, imp=imp_node, exp=exp_node)
     
     filtered_flows = [
     ('imp', 'gaz_pe', ''),
@@ -889,8 +908,11 @@ def prepare_sepia(countries):
     return tot_results
 
  
- for country in ALL_COUNTRIES:
-    tot_results = generate_results(tot_flows[country], tot_results, country)
+ if not flows_only:
+  for country in ALL_COUNTRIES:
+   tot_results = generate_results(tot_flows[country], tot_results, country)
+
+ return tot_flows, tot_co2
 
 
 if __name__ == "__main__":

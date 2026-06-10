@@ -303,12 +303,19 @@ def hex_to_rgba(h,opacity):
         rgb.append(str(opacity))
         return 'rgba('+','.join(rgb)+')'
 
+def zero_small_flows(flows, min_flow=1e-4):
+    """Zero sub-threshold values without corrupting MultiIndex columns."""
+    out = flows.copy()
+    values = out.to_numpy(dtype=float, copy=True)
+    values[np.abs(values) < min_flow] = 0.0
+    out.iloc[:, :] = values
+    return out
+
 # Sankey
 # Create Sankeys with slider (every 'interval_year' years)
 def create_sankey(flows, nodes, processes, main_params, interval_year=5, title="Sankey diagram"):
     flows = flows.round(main_params['DECIMALS'])
-    # Hide very small flows
-    flows[flows<1E-4] = 0
+    flows = zero_small_flows(flows)
     # To have transparent links
     nodes['ColorOpacity'] = nodes['Color'].apply(hex_to_rgba, opacity=0.4) 
     # Adding Labels to flows (when defined in processes) and transposing flows for Sankey rendering
