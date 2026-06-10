@@ -2268,7 +2268,8 @@ def add_RFNBO_demand_share_constraint(n: pypsa.Network):
     '''
     This constraint adds RFNBO share in suppying total hydrogen demand on global level
     '''
-    electrolysers = n.links[n.links.carrier == "H2 Electrolysis"].index
+    electrolyser_carriers = ["H2 Electrolysis", "vre H2 Electrolysis"]
+    electrolysers = n.links[n.links.carrier.isin(electrolyser_carriers)].index
     eff = n.links.loc[electrolysers, "efficiency"]
     weights = n.snapshot_weightings.generators
 
@@ -2277,14 +2278,23 @@ def add_RFNBO_demand_share_constraint(n: pypsa.Network):
     h2_consuming_carriers = ["methanolisation", "H2 turbine","H2 Fuel Cell","Sabatier","Fischer-Tropsch"] 
     consuming_links = n.links[n.links.carrier.isin(h2_consuming_carriers)].index
     h2_link_consumption = ( hydrogen_dispatch.loc[:, consuming_links] * weights).sum()
+    # Haber-Bosch: H2 input at bus2, flow = Link-p (bus0) * |efficiency2|
+    haber_bosch = n.links[n.links.carrier == "Haber-Bosch"].index
+    if len(haber_bosch) > 0:
+        eff2 = n.links.loc[haber_bosch, "efficiency2"].abs()
+        h2_link_consumption = h2_link_consumption + (hydrogen_dispatch.loc[:, haber_bosch] * eff2 * weights).sum()
 
-    demand_carriers = ["H2 for industry", "shipping hydrogen"]
+    demand_carriers = ["H2 for industry", "H2 for shipping", "land transport fuel cell"]
     hydrogen_loads = n.loads[n.loads.carrier.isin(demand_carriers)].index
 
-    static_hydrogen_demand = n.loads.loc[hydrogen_loads, "p_set"].sum() * weights.sum()
-    # nonstatic_hydrogen_demand = (n.loads_t.p_set[hydrogen_loads].mul(weights, axis=0)).sum().sum()
+    hydrogen_demand = 0
+    for col in hydrogen_loads:
+        if col in n.loads_t.p_set.columns:
+            hydrogen_demand += (n.loads_t.p_set[col] * weights).sum()
+        else:
+            hydrogen_demand += n.loads.loc[col, "p_set"] * weights.sum()
 
-    total_hydrogen_demand = static_hydrogen_demand + h2_link_consumption
+    total_hydrogen_demand = hydrogen_demand + h2_link_consumption
     level = snakemake.config["solving"]["constraints"]["share"].get(investment_year)
 
     n.model.add_constraints(
