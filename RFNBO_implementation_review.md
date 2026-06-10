@@ -311,6 +311,24 @@ Fix (committed): after dropping the buses, remove every link touching a removed 
 Lesson for the full run: treat PyPSA consistency warnings about undefined buses in the
 solve logs as errors.
 
+Two further issues surfaced by the same diagnosis (post-solve analysis of the broken
+counterfactual networks):
+
+- **District-heat demand double-removal (fixed):** `remove_hydrogen_demands` subtracted
+  the baseline waste heat of removed H₂/e-fuel technologies from the urban-central-heat
+  *loads* (~70 TWh/yr, FR 83 → 21 TWh at 2040). Removing the supplying links already
+  removes the waste-heat supply; end-use demand must stay. The subtraction block was
+  removed.
+- **Oil-product demand rescaling is a design choice, not a bug (documented):** the
+  counterfactual scales oil-product loads by `1 − FT/Σ(oil loads)` (factor ≈ 0.43 at
+  2040, land-transport oil −57 %), i.e. the e-fuel share of final demand is *removed*
+  rather than substituted by fossil oil. This defines the counterfactual as "without
+  RFNBO-related consumption" rather than "RFNBO demand met fossil-only". Keep in mind
+  when interpreting counterfactual emissions and CO₂-price interactions.
+- Confirmed healthy: CO₂ prices in the counterfactual exactly match the baseline duals
+  (€913–1064/t in 2030, falling to €44–96/t in 2050) and non-H₂ electricity demand
+  grows as expected (industry 134 → 240 TWh, EV charging 7 → 147 TWh by 2050).
+
 ---
 
 ## 4. Workflow / configuration for the final run (all countries, 2H)
