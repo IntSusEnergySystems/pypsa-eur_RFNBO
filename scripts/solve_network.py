@@ -2647,8 +2647,13 @@ if __name__ == "__main__":
         target_year = 2035
         monthly_year = 2035
             
-    if investment_year >= 2030:
+    if investment_year >= 2030 and (
+        constraints.get("activate_vre_share_criterion")
+        or constraints.get("activate_carbon_intensity_criterion")
+    ):
         previous_horizon_data = [get_vre_share_carbon_intensity(country) for country in countries]
+    else:
+        previous_horizon_data = None
     n = pypsa.Network(snakemake.input.network)
     
     planning_horizons = snakemake.wildcards.get("planning_horizons", None)
