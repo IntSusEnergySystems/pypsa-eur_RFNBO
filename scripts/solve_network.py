@@ -1736,8 +1736,10 @@ def add_additionality_constraint(n: pypsa.Network):
     if snakemake.config["run"]["name"].startswith(("RFNBO")):
         baseline_updated = pypsa.Network(snakemake.input.baseline_updated)
     else:
-        logger.error("Baseline network not found for RFNBO scenario.")
-        return
+        raise RuntimeError(
+            "RFNBO constraint requires a baseline network but run name does not start with 'RFNBO': "
+            + snakemake.config["run"]["name"]
+        )
     #vre variables in generators category
     p_nom_gen = n.model["Generator-p_nom"]
     #vre variables in links category
@@ -1891,8 +1893,10 @@ def add_additionality_constraint_interconnected(n: pypsa.Network):
     if snakemake.config["run"]["name"].startswith(("RFNBO")):
         baseline_updated = pypsa.Network(snakemake.input.baseline_updated)
     else:
-        logger.error("Baseline network not found for RFNBO scenario.")
-        return
+        raise RuntimeError(
+            "RFNBO constraint requires a baseline network but run name does not start with 'RFNBO': "
+            + snakemake.config["run"]["name"]
+        )
 
     neighbours = get_country_neighbours(n)
     p_nom_gen = n.model["Generator-p_nom"]
@@ -1960,8 +1964,10 @@ def add_global_additionality_constraint(n: pypsa.Network):
     if snakemake.config["run"]["name"].startswith(("RFNBO")):
         baseline_updated = pypsa.Network(snakemake.input.baseline_updated)
     else:
-        logger.error("Baseline network not found for RFNBO scenario.")
-        return
+        raise RuntimeError(
+            "RFNBO constraint requires a baseline network but run name does not start with 'RFNBO': "
+            + snakemake.config["run"]["name"]
+        )
 
     gens = n.generators[
         (n.generators.p_nom_extendable) & 
@@ -2003,8 +2009,10 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
     if snakemake.config["run"]["name"].startswith(("RFNBO")):
         baseline_updated = pypsa.Network(snakemake.input.baseline_updated)
     else:
-        logger.error("Baseline network not found for RFNBO scenario.")
-        return
+        raise RuntimeError(
+            "RFNBO constraint requires a baseline network but run name does not start with 'RFNBO': "
+            + snakemake.config["run"]["name"]
+        )
     gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
     gens_links = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier.isin(generator_types))].index
     p_gen = n.model["Generator-p"].sel(snapshot=sns, name=gens)
@@ -2157,8 +2165,10 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
     if snakemake.config["run"]["name"].startswith(("RFNBO")):
         baseline_updated = pypsa.Network(snakemake.input.baseline_updated)
     else:
-        logger.error("Baseline network not found for RFNBO scenario.")
-        return
+        raise RuntimeError(
+            "RFNBO constraint requires a baseline network but run name does not start with 'RFNBO': "
+            + snakemake.config["run"]["name"]
+        )
     p_gen = n.model["Generator-p"].sel(snapshot=sns)
     p_gen_link = n.model["Link-p"].sel(snapshot=sns)
     p_electrolysers = n.model["Link-p"].sel(snapshot=sns)
