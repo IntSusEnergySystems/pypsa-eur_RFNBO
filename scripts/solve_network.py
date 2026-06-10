@@ -750,20 +750,23 @@ def remove_hydrogen_demands(n: pypsa.Network):
     aviation = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="kerosene for aviation")).sum().sum()/1e6
     ship_oil = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="shipping oil")).sum().sum()/1e6
     agri_oil = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="agriculture machinery oil")).sum().sum()/1e6
-    ft_percentage = (ft / (aviation + ship_oil + agri_oil))
-    per_without_efuels = 1-ft_percentage
+    tra_oil = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p_set.filter(like="land transport oil")).sum().sum()/1e6
+    ft_percentage = (ft / (aviation + ship_oil + agri_oil + tra_oil))
+    per_without_efuels = max(0, 1-ft_percentage)
     cols = n.loads.index[
         n.loads.index.str.contains(
-            "kerosene for aviation|shipping oil|agriculture machinery oil",
+            "kerosene for aviation|shipping oil|agriculture machinery oil|naphtha for industry",
             regex=True
         )
     ]
     n.loads.loc[cols, "p_set"] *= per_without_efuels
+    land_transport_cols = n.loads_t.p_set.filter(like="land transport oil").columns
+    n.loads_t.p_set.loc[:, land_transport_cols] *= per_without_efuels
     #removing efuels produced by methanation from gas for industry demands
     methanation = -(baseline_network.snapshot_weightings.generators @ baseline_network.links_t.p1.filter(like="Sabatier")).sum().sum()/1e6
     gas_ind = (baseline_network.snapshot_weightings.generators @ baseline_network.loads_t.p.filter(like="gas for industry")).sum().sum()/1e6
     meth_percentage = (methanation / gas_ind)
-    gas_without_efuels = 1-meth_percentage
+    gas_without_efuels = max(0, 1 - meth_percentage)
     cols_gas = n.loads.p_set.filter(like="gas for industry").index
     n.loads.loc[cols_gas, "p_set"] *= gas_without_efuels
     #removing waste heat produced by H2/molecule technlogies from DH demand
@@ -2148,9 +2151,8 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
     gen_monthly = p_gen.sel(name=gens).groupby(gen_country).sum().groupby("snapshot.month").sum()
     link_monthly = p_gen_link.sel(name=gens_link).groupby(gen_country_link).sum().groupby("snapshot.month").sum()
     vre_monthly = gen_monthly + link_monthly
-    print(vre_monthly)
+    
     elec_monthly = p_electrolysers.sel(name=electrolysers).groupby(link_country).sum().groupby("snapshot.month").sum()
-    print(elec_monthly)
     baseline_gens = baseline_updated.generators[
         (baseline_updated.generators.build_year >= monthly_year) & 
         (baseline_updated.generators.carrier.isin(generator_types))
@@ -2167,12 +2169,10 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
     baseline_links_vre = baseline_link.groupby(baseline_grouper_links, axis=1).sum()
     baseline_vre = baseline_p.groupby(baseline_country, axis=1).sum()
     rhs = baseline_vre + baseline_links_vre
-    print(rhs)
     rhs_monthly = rhs.groupby(rhs.index.month).sum()
     rhs_monthly.index.name = "month"
     rhs_monthly.columns.name = "country"
     rhs_xr = rhs_monthly.to_xarray().to_array(dim="country")
-    print(rhs_xr)
     common_countries = list(
         set(vre_monthly.coords["country"].values) & 
         set(elec_monthly.coords["country"].values) &
