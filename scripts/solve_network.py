@@ -1618,8 +1618,67 @@ def add_co2price_country(n, co2_price_countries, nyears=1.0):
     # total CO2 cost
     co2_cost = (lhs * price_da * nyears).sum(dim=dim)
     n.model.objective = n.model.objective + co2_cost
+    n.meta = {**(n.meta or {}), "co2_prices": price.to_dict()}
 
     logger.info("CO2 pricing added to objective.")
+
+def compute_country_co2_payments(n):
+    """
+    Compute realized per-country CO2 emission payments from a solved network.
+    """
+    co2_prices = (n.meta or {}).get("co2_prices")
+    if not co2_prices:
+        return {}
+
+    country = n.links.bus1.map(n.buses.location).map(n.buses.country)
+
+    country_DAC = (
+        n.links[n.links.carrier == "DAC"]
+        .bus3.map(n.buses.location)
+        .map(n.buses.country)
+    )
+    country[country_DAC.index] = country_DAC
+    patterns = ["process emissions", "HVC to air", "electrobiofuels","unsustainable bioliquids","biomass-to-methanol","biomass to liquid"]
+
+    for pattern in patterns:
+      source = n.links[n.links.carrier.str.contains(pattern)].bus0.map(n.buses.location).map(n.buses.country)
+      country[source.index] = source
+    mask = country.isna() | (country == '')
+    country[mask] = country[mask].index.str[:2]
+    country = country[country != 'EU']
+
+    weights = n.snapshot_weightings.generators
+    emissions_parts = []
+    for port in [col[3:] for col in n.links if col.startswith("bus")]:
+        if port == str(0):
+            efficiency = (
+                n.links["efficiency"].apply(lambda x: 1.0).rename("efficiency0")
+            )
+        elif port == str(1):
+            efficiency = n.links["efficiency"]
+        else:
+            efficiency = n.links[f"efficiency{port}"]
+        mask = n.links[f"bus{port}"].map(n.buses.carrier).eq("co2")
+
+        idx = n.links[mask].index
+        exclude = ["EU oil refining", "EU methanol import", "EU oil import"]
+        idx = idx[~np.isin(idx, exclude)]
+        grouping = country.loc[idx]
+
+        if not grouping.isnull().all() and len(idx) > 0:
+            flows = n.links_t.p0[idx].multiply(efficiency[idx], axis=1)
+            expr = flows.groupby(grouping, axis=1).sum().mul(weights, axis=0).sum()
+            emissions_parts.append(expr)
+
+    if emissions_parts:
+        emissions = sum(emissions_parts)
+    else:
+        emissions = pd.Series(dtype=float)
+
+    price = pd.Series(co2_prices).reindex(emissions.index).fillna(0.0)
+    payments = (emissions * price).to_dict()
+    payments["total"] = sum(payments.values())
+    return payments
 
 def get_vre_share_carbon_intensity(country):
     '''
@@ -2778,7 +2837,14 @@ if __name__ == "__main__":
         n.model.print_infeasibilities()
         raise RuntimeError("Solving status 'infeasible'. Infeasibilities computed.")
 
+    co2_prices = (n.meta or {}).get("co2_prices")
+    co2_payments = compute_country_co2_payments(n) if co2_prices else None
+
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
+    if co2_prices:
+        n.meta["co2_prices"] = co2_prices
+    if co2_payments:
+        n.meta["co2_payments"] = co2_payments
     n.export_to_netcdf(snakemake.output.network)
 
     if snakemake.output.get("model"):

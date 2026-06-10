@@ -228,6 +228,9 @@ def calculate_metrics(n: pypsa.Network) -> pd.Series:
     metrics["line_volume"] = metrics["line_volume_AC"] + metrics["line_volume_DC"]
 
     metrics["total costs"] = n.statistics.capex().sum() + n.statistics.opex().sum()
+    co2_payments_total = (n.meta or {}).get("co2_payments", {}).get("total", 0.0)
+    metrics["co2 payments"] = co2_payments_total
+    metrics["total costs incl co2 payments"] = metrics["total costs"] + co2_payments_total
 
     buses_i = n.buses.query("carrier == 'AC'").index
     prices = n.buses_t.marginal_price[buses_i]
