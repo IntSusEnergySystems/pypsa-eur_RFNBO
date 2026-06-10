@@ -329,6 +329,33 @@ counterfactual networks):
   (€913–1064/t in 2030, falling to €44–96/t in 2050) and non-H₂ electricity demand
   grows as expected (industry 134 → 240 TWh, EV charging 7 → 147 TWh by 2050).
 
+### 3.5 Re-run after all fixes (2026-06-10 afternoon) — the test now discriminates
+
+All 64 steps optimal. Key indicators (GW / bn €):
+
+| Horizon | base VRE | noH₂ VRE | RFNBO VRE | base Ely | RFNBO Ely | base cost | RFNBO cost | RFNBO CO₂ pay |
+|---------|---------|----------|-----------|----------|-----------|-----------|------------|----------------|
+| 2030 | 562 | **382** | 538 | 63.6 | **42.4** | 208.6 | 197.2 | 236.3 |
+| 2035 | 786 | 522 | 811 | 110.6 | 107.3 | 228.1 | 225.7 | 151.8 |
+| 2040 | 969 | 607 | 1004 | 145.2 | 155.7 | 242.1 | 244.3 | 62.7 |
+| 2045 | 1105 | 671 | 1136 | 164.3 | 184.7 | 238.5 | 242.8 | 15.5 |
+| 2050 | 1093 | 659 | 1124 | 164.3 | 184.7 | 219.6 | 225.4 | 1.1 |
+
+Observations:
+
+- The counterfactual now decarbonizes properly (382–671 GW VRE) instead of collapsing,
+  and contains no H₂ assets from 2030 on.
+- **The RFNBO constraints now visibly shape the solution**: 2030 electrolyser capacity
+  drops by a third vs baseline (42 vs 64 GW — the hourly matching against the much
+  smaller additional-VRE pool delays electrolysis), while from 2040 RFNBO_CR builds
+  *more* electrolyser capacity (156–185 vs 145–164 GW) and more VRE than baseline —
+  capacity oversizing to satisfy hour-by-hour matching at lower capacity factors.
+- A cost premium emerges in later horizons (e.g. +4.3 bn €/yr in 2045); 2030 capex+opex
+  is *lower* than baseline because less electrolysis is built (check how the H₂ demand
+  gap is covered in 2030 — likely SMR — when interpreting).
+- `co2 payments` rows are populated for the priced scenarios and decline with the
+  CO₂-price trajectory, as expected.
+
 ---
 
 ## 4. Workflow / configuration for the final run (all countries, 2H)
