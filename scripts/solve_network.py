@@ -2064,6 +2064,11 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
          f"{', '.join(sorted(active_countries))}")
     else:
        active_countries = list(common_countries)
+    if len(active_countries) == 0:
+     logger.info(
+        "No countries eligible for temporal correlation constraint, skipping"
+     )
+     return
     #annual PPA
     vre_total_annual = vre_total.sum("snapshot")
     electrolysers_annual = electrolysers_total.sum("snapshot")
@@ -2196,7 +2201,6 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
         set(elec_monthly.coords["country"].values) &
         set(rhs_xr.coords["country"].values)
     )
-    constraints = config["solving"].get("constraints", {})
     if constraints["activate_vre_share_criterion"]:
       if investment_year != 2025:
        #getting VRE share from previous planning horizon for each country
@@ -2213,6 +2217,14 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
          f"{', '.join(sorted(active_countries))}")
       else:
        active_countries = list(common_countries)
+    else:
+       active_countries = list(common_countries)
+    
+    if len(active_countries) == 0:
+     logger.info(
+        "No countries eligible for monthly temporal correlation constraint, skipping"
+     )
+     return
     
     n.model.add_constraints(
         vre_monthly.sel(country=active_countries) - rhs_xr.sel(country=active_countries)  >= elec_monthly.sel(country=active_countries),
