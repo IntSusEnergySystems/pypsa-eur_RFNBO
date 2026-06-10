@@ -1884,7 +1884,7 @@ def add_additionality_constraint(n: pypsa.Network):
        #countries not complying with carbon intensity criterion
        intensity_noncompliant = df.index[df["co2_intensity"] > level_intensity]
        #countries failing both criterion
-       eligible_countries = set(vre_noncompliant).union(set(intensity_noncompliant))
+       eligible_countries = set(vre_noncompliant).intersection(set(intensity_noncompliant))
        active_countries = common_countries.intersection(eligible_countries)
        logger.info(
         f"Additionality constraint applied to countries "
