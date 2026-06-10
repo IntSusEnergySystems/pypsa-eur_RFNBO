@@ -5,6 +5,7 @@
 - Why lot of methanation/Fischer-Tropsch in baseline 2030/2035?
     - Could disable CO2 pipelines in < 2040
     - Could reduce CO2 constraint in 2030
+    (If we cannot reduce the co2 budget than we can add the LULUCF potentials for each country in the co2 budget, this will relax the constraint to some extent + we can justify it)
 
 - Why do direct couplded electrolysers develop in baseline?
 
