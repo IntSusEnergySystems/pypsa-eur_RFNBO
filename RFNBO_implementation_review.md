@@ -668,7 +668,7 @@ simply did less — exactly the unfair comparison this constraint removes.
 
 | # | Action | Severity | Ref |
 |---|--------|----------|-----|
-| 1 | Fix grid CO₂-intensity computation (divide by efficiency / use fuel input) | CRITICAL for exemptions | §2 C1 |
+| 1 | Fix grid CO₂-intensity computation (divide by efficiency / use fuel input) | CRITICAL for exemptions | §2 C1 |(Done)
 | 2 | Unify `sector_opts: 2H` across all configs; verify cross-scenario paths | CRITICAL for full run | §4.1 |
 | 3 | Define `target_year`/`temporal_year`/`monthly_year` for every variant; CR cohort per tex (2025) | MAJOR | §2 C4 |
 | 4 | Decide union vs intersection for the two exemption criteria; fix log text | MAJOR (policy) | §2 C3 |

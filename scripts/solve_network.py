@@ -1747,16 +1747,48 @@ def get_vre_share_carbon_intensity(country):
 
     existing_types = [t for t in gas_chp_types if t in co2_intensity_g_kwh.index]
     co2_intensity_g_kwh.loc[existing_types] = co2_intensity_g_kwh.loc["CCGT"]
-    emissions = tota_elec_grid_techs * co2_intensity_g_kwh
+    
+    #mapping emissions
+    gen_emissions = (
+        (n.snapshot_weightings.generators @ n.generators_t.p[gens])
+        .div(n.generators.loc[gens, "efficiency"])
+        .filter(like=country).mul(1e3)
+    )
+
+    gen_emissions = (
+        gen_emissions
+        * n.generators.loc[gen_emissions.index, "carrier"].map(co2_intensity_g_kwh)
+    )
+
+    gen_emissions = (
+        gen_emissions
+        .groupby(n.generators.loc[gen_emissions.index, "carrier"])
+        .sum()
+    )
+    link_emissions = (
+        (n.snapshot_weightings.generators @ -n.links_t.p1[links])
+        .div(n.links.loc[links, "efficiency"])
+        .filter(like=country).mul(1e3)
+    )
+
+    link_emissions = (link_emissions
+                     * n.links.loc[link_emissions.index, "carrier"].map(co2_intensity_g_kwh))
+
+    link_emissions = (
+        link_emissions
+        .groupby(n.links.loc[link_emissions.index, "carrier"])
+        .sum())
+    emissions = pd.concat(
+        [gen_emissions, link_emissions,]
+    ).groupby(level=0).sum()
+    
     #convert to g/MJ
     emissions = emissions / 3.6
     total_emissions = emissions.sum()
 
     renewable_carriers = generator_types + [
-    "H2 Fuel Cell",
     "urban central solid biomass CHP",
     "urban central solid biomass CHP CC",
-    "H2 turbine",
     "geothermal organic rankine cycle"]
 
     renewable_total = tota_elec_grid_techs[
