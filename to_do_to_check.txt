@@ -48,7 +48,7 @@
    * Direct connected electrolysers less than 10% by 2050.
    * Investments in electrolysers start from 2030.
    * GB demand problem still there even after removing industrial demand problem
-   * The carbon constraint is not applied on CH, i checked alot the reason but still couldnot found the problem. 
+   * The carbon constraint is not applied on CH, i checked alot the reason but still couldnot found the problem.(no problem with constraint, post processing error, as CHP constains CH, so all CHPS emissions we are mapped for CH in sankey) 
 ########
 # TODO #
 ########
