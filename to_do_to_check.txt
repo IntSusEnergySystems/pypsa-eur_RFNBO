@@ -43,6 +43,12 @@
     * at EU level, in baseline, we have 86GW of direct connected -> so only Swiss. but no VRE on CH Sankey, visible only at EU level
     * at EU level, in CR, we have 54GW of direct connected, fed by solar + onwind. visible in DK/EU sankeys, and capacities
 
+- Results of test simulation with allowing H2 network from 2035 and CO2 network from 2040.(baseline, 33 nodes, 6H)
+   * no methanation in any year
+   * Direct connected electrolysers less than 10% by 2050.
+   * Investments in electrolysers start from 2030.
+   * GB demand problem still there even after removing industrial demand problem
+   * The carbon constraint is not applied on CH, i checked alot the reason but still couldnot found the problem. 
 ########
 # TODO #
 ########
