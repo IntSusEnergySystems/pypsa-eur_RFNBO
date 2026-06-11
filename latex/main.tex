@@ -1,0 +1,411 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{acronym}
+\usepackage{tabularx}
+\usepackage{tcolorbox}
+\tcbuselibrary{minted,breakable,xparse,skins}
+
+\definecolor{bg}{gray}{0.95}
+\DeclareTCBListing{mintedbox}{O{}m!O{}}{%
+  breakable=true,
+  listing engine=minted,
+  listing only,
+  minted language=#2,
+  minted style=default,
+  minted options={%
+    linenos,
+    gobble=0,
+    breaklines=true,
+    breakafter=,,
+    fontsize=\small,
+    numbersep=8pt,
+    #1},
+  boxsep=0pt,
+  left skip=0pt,
+  right skip=0pt,
+  left=25pt,
+  right=0pt,
+  top=3pt,
+  bottom=3pt,
+  arc=5pt,
+  leftrule=0pt,
+  rightrule=0pt,
+  bottomrule=2pt,
+  toprule=2pt,
+  colback=bg,
+  colframe=orange!70,
+  enhanced,
+  overlay={%
+    \begin{tcbclipinterior}
+    \fill[orange!20!white] (frame.south west) rectangle ([xshift=20pt]frame.north west);
+    \end{tcbclipinterior}},
+  #3}
+
+\begin{document}
+\section*{RFNBO Constraints}
+The EU delegated acts allow exemptions from additionality and temporal correlation when a bidding zone already meets high renewable penetration or low carbon intensity. In code, countries with renewable electricity share below 90\% \emph{or} grid carbon intensity above 18\,gCO$_2$/MJ (64.8\,gCO$_2$/kWh) in the \emph{previous} myopic planning horizon are eligible for constraints; when both criteria flags are active, the union of non-compliant countries is used for additionality. Temporal correlation can be restricted analogously via the VRE-share flag.
+
+\textbf{\textcolor{red}{Current production default: both \texttt{activate\char`_vre\char`_share\char`_criterion} and \texttt{activate\char`_carbon\char`_intensity\char`_criterion} are disabled in scenario overrides (pending bug fixes). With these flags off, all modelled countries are subject to additionality and temporal constraints.}}
+
+\subsection*{Translating policies into model constraints}
+Each RFNBO rule is implemented as a linear constraint (or network extension) in \texttt{solve\char`_network.py} or \texttt{prepare\char`_sector\char`_network.py}, activated by config flags and scenario name (\texttt{RFNBO\char`_CR}, \texttt{RFNBO\char`_Add}, \texttt{RFNBO\char`_Temp}, \ldots). Counterfactual references are taken from the solved \texttt{baseline\char`_without\char`_H2} network at the \emph{same} planning horizon (\texttt{p\char`_nom\char`_opt} for capacities, dispatch time series for temporal rules).
+
+\begin{center}
+\begin{tabular}{llll}
+\hline
+Delegated-act concept & Constraint / extension & Scenarios & Active from \\
+\hline
+Additionality & \texttt{additionality\char`_constraint} & \texttt{RFNBO\char`_CR}, \texttt{RFNBO\char`_Add} & 2030 \\
+Temporal (monthly) & \texttt{temporal\char`_correlation\char`_monthly} & \texttt{RFNBO\char`_CR}, \texttt{RFNBO\char`_Temp} & 2025 horizon only \\
+Temporal (hourly + annual PPA) & \texttt{temporal\char`_correlation}, \texttt{annual\char`_ppa} & \texttt{RFNBO\char`_CR}, \texttt{RFNBO\char`_Temp} & 2030 \\
+Endogenous H$_2$ demand floor & \texttt{endogenous\char`_H2\char`_demand\char`_floor} & all \texttt{RFNBO*} & 2030 \\
+Direct VRE connection & \texttt{activate\char`_direct\char`_vre\char`_connected\char`_electrolysers} & config flag & network build \\
+Country CO$_2$ pricing & \texttt{add\char`_co2price\char`_country} & non-baseline RFNBO & 2030+ \\
+RFNBO supply share & \texttt{RBNFO\char`_h2\char`_supply\char`_share} & config flag & 2030 (disabled) \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection*{Country level carbon constraint}
+For the baseline scenario, per-country CO$_2$ emission budgets are enforced (\texttt{add\char`_co2limit\char`_country}). The dual (shadow) price $\lambda_c^{\mathrm{CO}_2}$ of each country's budget constraint quantifies the marginal cost of abating one tonne of CO$_2$ in that country.
+
+For non-baseline RFNBO scenarios (\texttt{co2\char`_price\char`_national: true}), national CO$_2$ prices are \emph{not} re-optimised: they are read from the solved baseline network's shadow prices at the same horizon,
+\[
+\lambda_c^{\mathrm{CO}_2} = -\mu\bigl(\texttt{co2\char`_limit\char`_per\char`_country}_c\bigr),
+\]
+and added to the objective as an emission payment term. Prices are stored in \texttt{n.meta["co2\char`_prices"]} and applied to all CO$_2$-emitting link flows grouped by country:
+\[
+\mathrm{Obj}^{\mathrm{new}} = \mathrm{Obj} + \sum_c \lambda_c^{\mathrm{CO}_2}\, e_c,
+\]
+where $e_c$ is the annual weighted CO$_2$ flow (tonnes) attributed to country~$c$. This decouples RFNBO compliance costs from the baseline carbon budget while preserving country-specific carbon valuations.
+
+\newpage
+\section*{Additionality x Geographical correlation}
+
+\subsection*{Additionality Constraint}
+Per country~$c$, the additionality constraint enforces that \emph{incremental} extendable VRE capacity in the RFNBO scenario exceeds the extendable VRE capacity optimised in the \texttt{baseline\char`_without\char`_H2} counterfactual at the same horizon, net of newly built grid-connected electrolyser capacity (1:1 in GW, no efficiency or capacity-factor conversion):
+\[
+\sum_{i \in \mathcal{V}_c^{\mathrm{ext}}} C_i^{\mathrm{RFNBO}}
+\;-\;
+\sum_{j \in \mathcal{E}_c^{\mathrm{ext}}} C_j^{\mathrm{RFNBO}}
+\;\geq\;
+\sum_{i \in \mathcal{V}_c^{\mathrm{ext}}} C_i^{\mathrm{baseline}},
+\]
+where $\mathcal{V}_c^{\mathrm{ext}}$ are extendable generators and links whose carrier is in the VRE set and whose bus maps to country~$c$; $\mathcal{E}_c^{\mathrm{ext}}$ are extendable links with carrier \texttt{H2 Electrolysis} at bus0 in country~$c$; and $C_i^{\mathrm{baseline}}$ uses \texttt{p\char`_nom\char`_opt} from the solved baseline network. Only \emph{current-horizon} extendable assets enter both sides---this is per-horizon additionality, not cumulative stock.
+
+\vspace{1cm}
+
+\begin{itemize}
+    \item Constraint name: \quad \texttt{additionality\char`_constraint}
+    \item Definition: \texttt{add\char`_additionality\char`_constraint()} (\texttt{solve\char`_network.py})
+    \item Activation: \texttt{RFNBO\char`_CR} / \texttt{RFNBO\char`_Add}, \texttt{investment\char`_year} $\geq$ 2030
+    \item Questions/Remarks:
+    \begin{itemize}
+        \item \textbf{Which renewables are considered?}
+        \begin{mintedbox}{python}
+generator_types = list(
+    set(config["electricity"]["renewable_carriers"]
+        + ["solar rooftop", "geothermal organic rankine cycle"])
+)
+        \end{mintedbox}
+        $\Rightarrow$ Includes \texttt{config["electricity"]["renewable\char`_carriers"]} (solar, solar-hsat, onwind, offwind-ac/dc/float, hydro) plus solar rooftop and geothermal ORC. Both \texttt{Generator} and \texttt{Link} components with these carriers and \texttt{p\char`_nom\char`_extendable} count toward VRE capacity.
+
+        \item \textbf{Which assets are exempt?}
+        $\Rightarrow$ Direct-connection carriers (\texttt{solar vre}, \texttt{onwind vre}, \texttt{offwind-ac vre}, \texttt{offwind-dc vre}, \texttt{vre H2 Electrolysis}) are not in the filter sets and are therefore exempt by construction.
+
+        \item \textbf{To which baseline does it compare?}
+        \begin{mintedbox}{python}
+baseline_updated = pypsa.Network(snakemake.input.baseline_updated)
+rhs = baseline_gens.groupby(country).p_nom_opt.sum()
+    + baseline_links.groupby(country).p_nom_opt.sum()
+        \end{mintedbox}
+        $\Rightarrow$ The solved \texttt{baseline\char`_without\char`_H2} network at the \emph{same} planning horizon.
+
+        \item \textbf{Electrolyser subtraction?}
+        $\Rightarrow$ Grid \texttt{H2 Electrolysis} \texttt{p\char`_nom} is subtracted 1:1 (GW) from the VRE sum; no conversion via efficiency or capacity factor.
+    \end{itemize}
+\end{itemize}
+
+\subsection*{Interconnected Additionality Constraint}
+Relaxed geographic variant: VRE capacity in country~$c$ \emph{and its AC/DC neighbours} may satisfy additionality for electrolysers located in~$c$.
+
+\[
+\sum_{c' \in \mathcal{N}(c)} \sum_{i \in \mathcal{V}_{c'}^{\mathrm{ext}}} C_i^{\mathrm{RFNBO}}
+\;-\;
+\sum_{j \in \mathcal{E}_c^{\mathrm{ext}}} C_j^{\mathrm{RFNBO}}
+\;\geq\;
+\sum_{i \in \mathcal{V}_c^{\mathrm{ext}}} C_i^{\mathrm{baseline}}.
+\]
+
+\vspace{1cm}
+
+\begin{itemize}
+    \item Constraint name: \quad \texttt{additionality\char`_constraint\char`_interconnected}
+    \item Definition: \texttt{add\char`_additionality\char`_constraint\char`_interconnected()} (\texttt{solve\char`_network.py})
+    \item Questions/Remarks:
+    \begin{itemize}
+        \item \textbf{Status in scenario runs?}
+        $\Rightarrow$ Implemented (\texttt{interconnected\char`_additionality} config flag) but \textbf{not activated} in current regulatory scenario configs (\texttt{false}). Not tested in production runs.
+    \end{itemize}
+\end{itemize}
+
+\subsection*{Global Additionality Constraint}
+EU-wide pooling: total extendable VRE minus total extendable electrolyser capacity must exceed baseline extendable VRE.
+
+\[
+\sum_{i \in \mathcal{V}^{\mathrm{ext}}} C_i^{\mathrm{RFNBO}}
+\;-\;
+\sum_{j \in \mathcal{E}^{\mathrm{ext}}} C_j^{\mathrm{RFNBO}}
+\;\geq\;
+\sum_{i \in \mathcal{V}^{\mathrm{ext}}} C_i^{\mathrm{baseline}}.
+\]
+
+\vspace{1cm}
+
+\begin{itemize}
+    \item Constraint name: \quad \texttt{global\char`_additionality\char`_constraint}
+    \item Definition: \texttt{add\char`_global\char`_additionality\char`_constraint()} (\texttt{solve\char`_network.py})
+    \item Questions/Remarks:
+    \begin{itemize}
+        \item \textbf{Status in scenario runs?}
+        $\Rightarrow$ Implemented (\texttt{global\char`_additionality} config flag) but \textbf{not activated} in current regulatory scenario configs. Intended for the no-geographic-correlation variant; not tested in production runs.
+    \end{itemize}
+\end{itemize}
+
+\newpage
+\section*{Temporal x Geographical correlation}
+
+\subsection*{Hourly Temporal Correlation Constraint}
+Links hourly electrolyser electricity consumption to dispatch from the post-2025 VRE cohort, relative to the same cohort in the \texttt{baseline\char`_without\char`_H2} counterfactual. For each country~$c$ and snapshot~$t$:
+\[
+g_{c,t}^{\mathrm{RFNBO,VRE}} - g_{c,t}^{\mathrm{baseline,VRE}}
+\;\geq\;
+g_{c,t}^{\mathrm{RFNBO,el}},
+\]
+where $g^{\mathrm{RFNBO,VRE}}$ sums dispatch of generators/links with \texttt{build\char`_year} $\geq$ \texttt{temporal\char`_year} and VRE carriers; $g^{\mathrm{baseline,VRE}}$ is the corresponding solved baseline dispatch; and $g^{\mathrm{RFNBO,el}}$ is dispatch of \texttt{H2 Electrolysis} links with \texttt{build\char`_year} $\geq$ \texttt{temporal\char`_year}. A companion \textbf{annual PPA} constraint applies the same inequality summed over all snapshots (currently without snapshot weightings):
+\[
+\sum_t \bigl(g_{c,t}^{\mathrm{RFNBO,VRE}} - g_{c,t}^{\mathrm{baseline,VRE}}\bigr)
+\;\geq\;
+\sum_t g_{c,t}^{\mathrm{RFNBO,el}}.
+\]
+
+\vspace{1cm}
+
+\begin{itemize}
+    \item Constraint names: \quad \texttt{temporal\char`_correlation}, \texttt{annual\char`_ppa}
+    \item Definition: \texttt{add\char`_temporal\char`_correlation\char`_constraint()} (\texttt{solve\char`_network.py})
+    \item Activation: \texttt{RFNBO\char`_CR} / \texttt{RFNBO\char`_Temp}, \texttt{investment\char`_year} $\geq$ \texttt{target\char`_year} (= 2030)
+    \item Questions/Remarks:
+    \begin{itemize}
+        \item \textbf{Which renewables are considered?}
+        $\Rightarrow$ Same VRE carrier set as additionality (incl.\ hydro, solar rooftop, geothermal ORC). Direct-connection carriers exempt.
+
+        \item \textbf{Which assets enter the cohort?}
+        \begin{mintedbox}{python}
+gens = n.generators[(n.generators.build_year >= temporal_year)
+                    & (n.generators.carrier.isin(generator_types))].index
+electrolysers = n.links[(n.links.build_year >= temporal_year)
+                        & (n.links.carrier == "H2 Electrolysis")].index
+        \end{mintedbox}
+        $\Rightarrow$ Cohort threshold \texttt{temporal\char`_year} = 2025 (not 2030): assets built before 2025 are grandfathered for temporal matching. Only grid \texttt{H2 Electrolysis} is constrained; \texttt{vre H2 Electrolysis} is exempt.
+
+        \item \textbf{Year settings for CR / Temp scenarios?}
+        \begin{mintedbox}{python}
+if scenario.startswith("RFNBO_CR") or scenario.startswith("RFNBO_Temp"):
+    temporal_year = 2025
+    target_year = 2030
+        \end{mintedbox}
+        $\Rightarrow$ Hourly + annual PPA active from the 2030 planning horizon onward. Monthly matching applies only at the 2025 horizon (see below).
+
+        \item \textbf{What is the granularity?}
+        $\Rightarrow$ Per country (same bidding zone), per snapshot for hourly; per country for annual PPA.
+
+        \item \textbf{How do we handle the renewable share exemption?}
+        $\Rightarrow$ When \texttt{activate\char`_vre\char`_share\char`_criterion} is enabled, only countries below the 90\% VRE-share threshold in the previous horizon are constrained. \textbf{Currently disabled} in production runs (all countries constrained).
+
+        \item \textbf{Shouldn't we extend this to other RFNBO technologies?}
+        $\Rightarrow$ Only grid-connected \texttt{H2 Electrolysis} is considered.
+    \end{itemize}
+\end{itemize}
+
+\subsection*{Interconnected Hourly Temporal Correlation Constraint}
+
+\[
+\sum_{c' \in \mathcal{N}(c)} g_{c',t}^{\mathrm{RFNBO,VRE}}
+\;\geq\;
+g_{c,t}^{\mathrm{RFNBO,el}}.
+\]
+
+\vspace{1cm}
+
+\textbf{\textcolor{red}{For now, the interconnected geographical variant is not tested in any of our regulatory scenarios. Not analysed for now!}}
+
+\begin{itemize}
+    \item Constraint name: \quad \texttt{temporal\char`_correlation\char`_interconnected}
+    \item Definition: \texttt{add\char`_temporal\char`_correlation\char`_interconnected()} (\texttt{solve\char`_network.py})
+    \item Questions/Remarks:
+    \begin{itemize}
+        \item \textbf{Status?}
+        $\Rightarrow$ Implemented but \texttt{interconnected\char`_temporal\char`_correlation: false} in all current scenario configs; not tested.
+    \end{itemize}
+\end{itemize}
+
+\subsection*{Global Hourly Temporal Correlation Constraint}
+EU-wide hourly matching without geographic correlation.
+\[
+\sum_c g_{c,t}^{\mathrm{RFNBO,VRE}}
+\;\geq\;
+\sum_c g_{c,t}^{\mathrm{RFNBO,el}}.
+\]
+
+\vspace{1cm}
+
+\textbf{\textcolor{red}{Used only when no geographical correlation}}
+
+\begin{itemize}
+    \item Constraint name: \quad \texttt{global\char`_temporal\char`_correlation}
+    \item Definition: \texttt{add\char`_global\char`_temporal\char`_correlation\char`_constraint()} (\texttt{solve\char`_network.py})
+    \item Questions/Remarks:
+    \begin{itemize}
+        \item \textbf{Status?}
+        $\Rightarrow$ Implemented but \texttt{global\char`_temporal\char`_correlation: false} in current scenario configs; not tested.
+    \end{itemize}
+\end{itemize}
+
+\subsection*{Monthly Temporal Correlation Constraint}
+Same structure as hourly temporal correlation, but dispatch is aggregated by calendar month. For country~$c$ and month~$m$:
+\[
+\sum_{t \in m} g_{c,t}^{\mathrm{RFNBO,VRE}}
+\;-\;
+\sum_{t \in m} g_{c,t}^{\mathrm{baseline,VRE}}
+\;\geq\;
+\sum_{t \in m} g_{c,t}^{\mathrm{RFNBO,el}}.
+\]
+
+\textbf{Schedule:} for \texttt{RFNBO\char`_CR} / \texttt{RFNBO\char`_Temp}, monthly matching is active \emph{only} at the 2025 planning horizon (delegated act allows monthly correlation until end-2029). From 2030 onward, hourly matching plus annual PPA replaces it.
+
+\vspace{1cm}
+
+\begin{itemize}
+    \item Constraint name: \quad \texttt{temporal\char`_correlation\char`_monthly}
+    \item Definition: \texttt{add\char`_temporal\char`_correlation\char`_monthly\char`_constraint()} (\texttt{solve\char`_network.py})
+    \item Activation: \texttt{RFNBO\char`_CR} / \texttt{RFNBO\char`_Temp}, \texttt{investment\char`_year} = 2025
+    \item Questions/Remarks:
+    \begin{itemize}
+        \item \textbf{Cohort year?}
+        $\Rightarrow$ Uses \texttt{monthly\char`_year} = 2025 (same as \texttt{temporal\char`_year}): assets with \texttt{build\char`_year} $\geq$ 2025 enter the monthly balance.
+
+        \item \textbf{VRE share exemption?}
+        $\Rightarrow$ At the 2025 horizon all countries are constrained regardless of VRE share; exemption logic applies only at later horizons when the flag is enabled.
+    \end{itemize}
+\end{itemize}
+
+\subsection*{Global Monthly Temporal Correlation Constraint}
+EU-wide monthly matching without geographic correlation.
+\[
+\sum_c \sum_{t \in m} g_{c,t}^{\mathrm{RFNBO,VRE}}
+\;\geq\;
+\sum_c \sum_{t \in m} g_{c,t}^{\mathrm{RFNBO,el}}.
+\]
+
+\vspace{1cm}
+
+\textbf{\textcolor{red}{Used only when no geographical correlation}}
+
+\begin{itemize}
+    \item Constraint name: \quad \texttt{global\char`_temporal\char`_correlation\char`_monthly}
+    \item Definition: \texttt{add\char`_global\char`_temporal\char`_correlation\char`_monthly\char`_constraint()} (\texttt{solve\char`_network.py})
+    \item Questions/Remarks:
+    \begin{itemize}
+        \item \textbf{Status?}
+        $\Rightarrow$ Implemented but \texttt{global\char`_temporal\char`_correlation\char`_monthly: false} in current scenario configs; not tested.
+    \end{itemize}
+\end{itemize}
+
+\subsection*{RFNBO Share Constraint}
+Requires a minimum global share of total hydrogen demand to be met by electrolytic production. Let $g_k^{\mathrm{el}}$ be weighted H$_2$ output from electrolyser links (carriers \texttt{H2 Electrolysis} and \texttt{vre H2 Electrolysis}) and $D^{\mathrm{tot}}$ the weighted sum of static H$_2$ loads plus endogenous H$_2$-consuming link flows:
+\[
+\sum_k g_k^{\mathrm{el}} \;\geq\; \mathrm{level} \cdot D^{\mathrm{tot}},
+\]
+where \texttt{level} is set per planning horizon in config (\texttt{constraints.share}).
+
+\textbf{\textcolor{red}{Currently disabled}} (\texttt{RFNBO\char`_demand\char`_share: false} in all scenario configs). This is distinct from the endogenous H$_2$ demand floor below: the share constraint forces electrolytic \emph{production}, whereas the floor pins \emph{consumption} of e-fuel pathways.
+
+\subsection*{Endogenous H$_2$ Demand Floor}
+Prevents RFNBO scenarios from meeting compliance by simply producing less e-fuel and backfilling with fossil imports. For each endogenous H$_2$-consuming link carrier~$k$ (discovered structurally: links with exactly one port on an H$_2$ bus and consuming sign; excluding \texttt{H2 Fuel Cell}, \texttt{H2 turbine}, \texttt{H2 liquefaction}), the EU-wide annual weighted H$_2$ consumption in the RFNBO scenario must be at least the same quantity in the solved baseline network at the same horizon:
+\[
+\sum_{i \in \mathcal{K}_k} \sum_t w_t\, h_{i,t}^{\mathrm{RFNBO}}
+\;\geq\;
+\sum_{i \in \mathcal{K}_k} \sum_t w_t\, h_{i,t}^{\mathrm{baseline}},
+\]
+where $w_t$ are snapshot weightings and carriers with baseline consumption below 1\,MWh are skipped. Active for all \texttt{RFNBO*} scenarios from 2030 (\texttt{endogenous\char`_H2\char`_demand\char`_floor: true}).
+
+\vspace{1cm}
+
+\begin{itemize}
+    \item Constraint name: \quad \texttt{endogenous\char`_H2\char`_demand\char`_floor-<carrier>}
+    \item Definition: \texttt{add\char`_endogenous\char`_H2\char`_demand\char`_floor\char`_constraint()} (\texttt{solve\char`_network.py})
+    \item Questions/Remarks:
+    \begin{itemize}
+        \item \textbf{Rationale?}
+        $\Rightarrow$ Pins equal e-fuel service demand for a fair cost comparison against the baseline; the optimiser cannot ``opt out'' of H$_2$-based pathways.
+
+        \item \textbf{Important caveat?}
+        $\Rightarrow$ The floor constrains H$_2$ \emph{consumption}, not its production route. Non-electrolytic H$_2$ (e.g.\ SMR) can satisfy the floor; only additionality and temporal rules govern the renewable-electricity linkage.
+
+        \item \textbf{Reference network?}
+        $\Rightarrow$ Uses \texttt{baseline\char`_network} (full baseline with H$_2$ sector), not \texttt{baseline\char`_without\char`_H2}.
+    \end{itemize}
+\end{itemize}
+
+\subsection*{Direct Connection Variant}
+When \texttt{activate\char`_direct\char`_vre\char`_connected\char`_electrolysers} is enabled (\texttt{prepare\char`_sector\char`_network.py}), each node with grid VRE receives an isolated direct-connection subsystem that is inherently RFNBO-compliant (dedicated VRE line, no grid mixing):
+
+\begin{enumerate}
+    \item An isolated VRE bus (\texttt{\{node\} VRE}).
+    \item Dedicated extendable VRE generators (carriers \texttt{solar vre}, \texttt{onwind vre}, \texttt{offwind-ac vre}, \texttt{offwind-dc vre}) with the same costs and Atlite profiles as grid VRE.
+    \item An electrolyser \texttt{Link} (carrier \texttt{vre H2 Electrolysis}, same cost/efficiency as grid \texttt{H2 Electrolysis}) from the VRE bus to the H$_2$ bus.
+    \item Optional VRE-attached battery storage (\texttt{vre battery} store plus charger/discharger links).
+\end{enumerate}
+
+These carriers are exempt from all RFNBO constraints by construction (they match none of the additionality or temporal filter sets). National solar and onshore-wind \emph{potential} limits do account for direct-connection capacity (\texttt{solar vre} / \texttt{onwind vre} subtracted from available resource).
+
+\vspace{1cm}
+
+\begin{itemize}
+    \item Config flag: \quad \texttt{activate\char`_direct\char`_vre\char`_connected\char`_electrolysers}
+    \item Definition: \texttt{add\char`_h2\char`_gas\char`_infrastructure()} (\texttt{prepare\char`_sector\char`_network.py})
+    \item Questions/Remarks:
+    \begin{itemize}
+        \item \textbf{How is this implemented?}
+        \begin{mintedbox}{python}
+n.add("Bus", vre_buses, carrier="VRE")
+n.add("Generator", vre_names, bus=target_buses,
+      carrier=tech + " vre", p_nom_extendable=True, ...)
+n.add("Link", link_names, bus0=vre_buses, bus1=h2_buses,
+      carrier="vre H2 Electrolysis", p_nom_extendable=True, ...)
+        \end{mintedbox}
+        $\Rightarrow$ Replaces the earlier Generator-based ``VRE + electrolyser'' composite design. No separate RFNBO constraint is needed: physical isolation enforces temporal correlation.
+    \end{itemize}
+\end{itemize}
+
+
+
+\begin{table}[ht]
+\centering
+\label{tab:constraints}
+\begin{tabular}{lc}
+\hline
+Constraint & Additionality \\
+Solar &  \\
+Onshore Wind &  \\
+Offshore Wind &  \\
+Electrolysers &  \\
+VRE Electrolysers &  \\
+Total Costs (avg/year) &  billion /year \\
+Total Emissions-250 &  \\
+\hline
+\end{tabular}
+\end{table}
+
+\end{document}
