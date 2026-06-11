@@ -5,16 +5,20 @@
 - Why lot of methanation/Fischer-Tropsch in baseline 2030/2035?
     - Could disable CO2 pipelines in < 2040
     - Could reduce CO2 constraint in 2030
+    (If we cannot reduce the co2 budget than we can add the LULUCF potentials for each country in the co2 budget, this will relax the constraint to some extent + we can justify it)
 
 - Why do direct couplded electrolysers develop in baseline?
 
 - Is geothermal available for RFNBO?
+(yes, but model doesnot deploy it probably due to high CAPEX)
 
-- Are ror and hydro avalaible for RFNBO?
+- Are ror and hydro avalaible for RFNBO? 
+(in default configuration ror, hydro dams and PHS are not extendable, for baseline yes as they are connected to grid, in RFNBO scenarios, they are not part of additionality and temporal constraint, so they cannot be used for RFNBOs)
 
-- Is grid renewable share correctly defined? Does it include all renewables?
+- Is grid renewable share correctly defined? Does it include all renewables? 
 
 - Which bio-fuels do we allow in config?
+    -> specifcally, we don't have any biomass feeding the liquid fuels bus. knowing that aviation bets on it for SAF, we should try to better cover this.
 
 - Which cc techs do we allow in config? Are the sequestrated volumes realistic?
 
@@ -34,6 +38,17 @@
 
 - baseline_without_H2 does not reach neutrality in 2050 when using CO2 price, despite lower demand (e.g. FR still has ~40Mt). how does this affect our results? is relevant to look at this, or should we focus first on RFNBO cases?
 
+- Direct Connected Electrolysers: Swiss case
+    * installs 86GW of direct connected electrolysers in baseline + 28GW dedicated PV & 102 GW dedicated wind, 0 in current regulation
+    * at EU level, in baseline, we have 86GW of direct connected -> so only Swiss. but no VRE on CH Sankey, visible only at EU level
+    * at EU level, in CR, we have 54GW of direct connected, fed by solar + onwind. visible in DK/EU sankeys, and capacities
+
+- Results of test simulation with allowing H2 network from 2035 and CO2 network from 2040.(baseline, 33 nodes, 6H)
+   * no methanation in any year
+   * Direct connected electrolysers less than 10% by 2050.
+   * Investments in electrolysers start from 2030.
+   * GB demand problem still there even after removing industrial demand problem
+   * The carbon constraint is not applied on CH, i checked alot the reason but still couldnot found the problem.(no problem with constraint, post processing error, as CHP constains CH, so all CHPS emissions we are mapped for CH in sankey) 
 ########
 # TODO #
 ########

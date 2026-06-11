@@ -182,16 +182,19 @@ def get_energy_ratio(country, eurostat, jrc_dir, year, snakemake):
         e_country *= tj_to_ktoe
     else:
         # estimate physical output, energy consumption in the sector and country
+        #fix to remone Nans which result in zero indutrial demand for GB
+        #during debugging all data for GB >2020 is filled with NaNs.
+        query_year = 2019 if country == "GB" else year
         e_country = (
             eurostat.query(
-                "year == @year and country == @country and "
+                "year == @query_year and country == @country and "
                 "siec == 'TOTAL' and nrg_bal in @eb_sectors.keys()"
             )
             .set_index("nrg_bal")
             .value.rename(eb_sectors)
             .div(ktoe_to_twh)
         )
-
+    
     root = Path(jrc_dir, "EU27")
     fn = next(
         p
@@ -208,7 +211,6 @@ def get_energy_ratio(country, eurostat, jrc_dir, year, snakemake):
     year_i = df.columns.get_loc(year)
     e_eu27 = df.iloc[50:77, year_i]
     e_eu27.index = e_eu27.index.str.lstrip()
-
     e_ratio = e_country / e_eu27
 
     return pd.Series({k: e_ratio[v] for k, v in sub2sect.items()})

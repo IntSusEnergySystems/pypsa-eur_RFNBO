@@ -244,7 +244,7 @@ floor LHS by design.
 | 13 | Hardening (§2.3 minor) | MINOR | **Open** | — |
 | 14 | Consider `max_growth` limits | suggestion | **Open** | — |
 | 15 | Endogenous H₂ demand floor | MAJOR | **Done** | `c5473c87` |
-| 16 | Merge origin C1–C3 fixes into local branch | MAJOR | **Pending** | `c91e8ccd`, `90364c9b` |
+| 16 | Merge origin C1–C3 fixes into local branch | MAJOR | **Done** (2026-06-11 merge) | `c91e8ccd`, `90364c9b` |
 | 17 | Pin **electrolytic** H₂, not just consumption (R1, §7) | **CRITICAL** | **Open** | — |
 | 18 | Additionality blind to non-extendable stock (R3, §7) | MAJOR | **Open** | — |
 | 19 | Investigate 2030 SMR→Sabatier loop (515 TWh, §6.5) | MAJOR | **Open** | — |
