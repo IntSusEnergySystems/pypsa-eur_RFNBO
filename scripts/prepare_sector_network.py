@@ -6656,8 +6656,9 @@ if __name__ == "__main__":
 
     if not options["H2_network"]:
         remove_h2_network(n)
-
+    
     if options["co2_network"]:
+     if investment_year >= 2040:
         add_co2_network(
             n,
             costs,

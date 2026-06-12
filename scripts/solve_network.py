@@ -2514,7 +2514,6 @@ def _baseline_h2_energy_by_carrier(
         carrier_totals[carrier] = total
     return pd.Series(carrier_totals)
 
-
 def add_endogenous_H2_demand_floor_constraint(n: pypsa.Network) -> None:
     """
     Force RFNBO scenarios to consume at least as much H2 in each endogenous
@@ -2578,30 +2577,27 @@ def add_endogenous_H2_demand_floor_constraint(n: pypsa.Network) -> None:
         lhs_parts = []
         for port, port_group in carrier_links.groupby("port"):
             links = port_group["link"].tolist()
+
             if port == 0:
-                lhs_parts.append(
-                    (hydrogen_dispatch.loc[:, links] * weights).sum()
-                )
+                expr = (hydrogen_dispatch.loc[:, links] * weights).sum()
+                lhs_parts.append(expr)
             else:
                 eff_col = _link_efficiency_col(port)
                 eff = n.links.loc[links, eff_col].abs()
-                lhs_parts.append(
-                    (hydrogen_dispatch.loc[:, links] * eff * weights).sum()
-                )
-        lhs = lhs_parts[0]
-        for part in lhs_parts[1:]:
-            lhs = lhs + part
+                expr = (hydrogen_dispatch.loc[:, links] * eff * weights).sum()
+                lhs_parts.append(expr)
 
+        lhs = sum(lhs_parts)
         safe_carrier = carrier.replace(" ", "_")
         n.model.add_constraints(
             lhs >= baseline_value,
             name=f"endogenous_H2_demand_floor-{safe_carrier}",
         )
+        
         logger.info(
-            "Endogenous H2 demand floor: %s >= %.1f TWh (baseline %s, %d links)",
+            "Endogenous H2 demand floor: %s >= %.1f TWh (links: %d)",
             carrier,
             baseline_value / 1e6,
-            investment_year,
             len(carrier_links),
         )
 

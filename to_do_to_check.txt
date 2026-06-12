@@ -47,7 +47,7 @@
    * no methanation in any year
    * Direct connected electrolysers less than 10% by 2050.
    * Investments in electrolysers start from 2030.
-   * GB demand problem still there even after removing industrial demand problem
+   * GB demand problem still there even after removing industrial demand problem ( GB has already rediuced its emissions by 54% compared to 1990 levels https://www.gov.uk/government/statistics/provisional-uk-greenhouse-gas-emissions-statistics-2025/2025-uk-greenhouse-gas-emissions-provisional-figures-statistical-release, considering that pypsa donot account for non-co2 emissions, the current results are ok.)
    * The carbon constraint is not applied on CH, i checked alot the reason but still couldnot found the problem.(no problem with constraint, post processing error, as CHP constains CH, so all CHPS emissions we are mapped for CH in sankey) 
 ########
 # TODO #
