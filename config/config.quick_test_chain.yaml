@@ -40,7 +40,7 @@ foresight: myopic
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#scenario
 scenario:
   clusters:
-  - 2
+  - 33
   opts:
   - ""
   sector_opts:
@@ -55,8 +55,34 @@ scenario:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
 countries:
+- AT
 - BE
+- BG
+- CH
+- CZ
+- DE
+- DK
+- EE
+- ES
+- FI
 - FR
+- GB
+- GR
+- HR
+- HU
+- IE
+- IT
+- LT
+- LU
+- LV
+- NL
+- 'NO'
+- PL
+- PT
+- RO
+- SE
+- SI
+- SK
 
 transmission_limit:
     2025: 1.0
@@ -207,9 +233,9 @@ co2_budget_national:
     SE: 0.0
     SK: 0.0
     RO: 0.0
-    BE: 0.05
+    BE: 0.0
     DE: 0.0
-    FR: 0.05
+    FR: 0.0
     GB: 0.0
     NL: 0.0
 TYNDP_values:
@@ -273,7 +299,7 @@ co2_budget:
   2035: 0.25
   2040: 0.1
   2045: 0.05
-  2050: 0.05
+  2050: 0.0
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#electricity
 electricity:
@@ -1010,7 +1036,7 @@ sector:
   methanation: true
   coal_cc: false
   dac: true
-  co2_vent: false
+  co2_vent: true
   heat_vent:
     urban central: false
     urban decentral: false
@@ -1367,7 +1393,7 @@ solving:
     VRE_Share: 90 #%
     activate_carbon_intensity_criterion: false
     carbon_intensity: 18  #gco2/MJ
-    activate_direct_vre_connected_electrolysers: true
+    activate_direct_vre_connected_electrolysers: false
     oversize_factor:
       solar: 2
       onwind: 2
@@ -1382,6 +1408,19 @@ solving:
     global_temporal_correlation_monthly: false
     RFNBO_demand_share: false
     endogenous_H2_demand_floor: false
+    non_rfnbo_h2_cap_2025: false
+    max_growth:
+      enable: true
+      # EU-wide new capacity per 5-year planning horizon, GW
+      carriers:
+        solar: 400
+        solar-hsat: 150
+        solar rooftop: 200
+        onwind: 200
+        offwind-ac: 60
+        offwind-dc: 80
+        offwind-float: 40
+        H2 Electrolysis: 200
     share:
      2025: 0.2
      2030: 0.3
@@ -1476,7 +1515,7 @@ solving:
     atol: 1000000
     rtol: 0.01
   oetc:
-  mem_mb: 90000
+  mem_mb: 128000
   memory_logging_frequency: 5
   runtime: 48h
 

@@ -1,0 +1,4 @@
+# Ignore all LaTeX build artifacts; track only source .tex files
+*
+!*.tex
+!.gitignore

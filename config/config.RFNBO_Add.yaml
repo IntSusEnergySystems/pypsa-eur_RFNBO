@@ -1033,7 +1033,7 @@ sector:
   methanation: true
   coal_cc: false
   dac: true
-  co2_vent: false
+  co2_vent: true
   heat_vent:
     urban central: true
     urban decentral: true
@@ -1390,7 +1390,7 @@ solving:
     VRE_Share: 90 #%
     activate_carbon_intensity_criterion: true
     carbon_intensity: 18 #gco2/MJ
-    activate_direct_vre_connected_electrolysers: true
+    activate_direct_vre_connected_electrolysers: false
     oversize_factor:
       solar: 2
       onwind: 2
@@ -1405,6 +1405,19 @@ solving:
     global_temporal_correlation_monthly: false
     RFNBO_demand_share: false
     endogenous_H2_demand_floor: true
+    non_rfnbo_h2_cap_2025: true
+    max_growth:
+      enable: true
+      # EU-wide new capacity per 5-year planning horizon, GW
+      carriers:
+        solar: 400
+        solar-hsat: 150
+        solar rooftop: 200
+        onwind: 200
+        offwind-ac: 60
+        offwind-dc: 80
+        offwind-float: 40
+        H2 Electrolysis: 200
     share:
      2025: 0.2
      2030: 0.3

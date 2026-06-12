@@ -114,6 +114,10 @@ rule all:
             run=run["name"],
             **config["scenario"],
         ),
+        expand(
+            RESULTS + "csvs/rfnbo_metrics.csv",
+            run=run["name"],
+        ),
         _sepia_html_outputs,
 
 # SEPIA post-processing only (prepare_sepia → generate_sepia → prepare_results).

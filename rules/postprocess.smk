@@ -634,6 +634,30 @@ def results_expand(template, **kwargs):
     return expand(template, **kwargs)
 
 
+rule make_rfnbo_metrics:
+    input:
+        networks=results_expand(
+            RESULTS
+            + "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc",
+            **config["scenario"],
+        ),
+    output:
+        rfnbo_metrics=RESULTS + "csvs/rfnbo_metrics.csv",
+    log:
+        RESULTS + "logs/make_rfnbo_metrics.log",
+    benchmark:
+        RESULTS + "benchmarks/make_rfnbo_metrics"
+    threads: 1
+    resources:
+        mem_mb=8000,
+    params:
+        scenario=config_provider("scenario"),
+    message:
+        "Creating RFNBO policy-resolution metrics across planning horizons"
+    script:
+        scripts("make_rfnbo_metrics.py")
+
+
 def sepia_study_expand_kw():
     if multi_scenario_enabled():
         return {}

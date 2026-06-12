@@ -297,6 +297,21 @@ variables are defined per scenario branch in `__main__`:
 Variant branches (`RFNBO_VAR-A1/A2`) are still marked `TO BE CHECKED & ADAPTED FOR
 VARIANTS` — review before interpreting variant results.
 
+### Per-carrier capacity growth limits (`max_growth`)
+
+Myopic solves can otherwise deploy implausible amounts of new capacity in a single
+5-year step (e.g. 0→364 GW electrolysers). The flag
+`solving.constraints.max_growth` (default `enable: true` with identical carrier caps
+in every scenario config) adds EU-wide **absolute** caps on new extendable capacity
+per planning horizon in `scripts/solve_network.py`
+(`add_max_growth_constraint`). Values are in GW per carrier per 5-year step; they
+apply to the sum of extendable generator and link `p_nom` for that carrier. Set
+`enable: false` to deactivate. The same caps must be used in baseline,
+`baseline_without_H2`, and all RFNBO scenarios so cross-scenario constraints
+(additionality, endogenous H₂ demand floor) stay mutually feasible. Native PyPSA
+`carriers.max_growth` is not used here because it only applies to multi-investment
+networks (`n._multi_invest`).
+
 ### Endogenous H₂ demand floor (fair comparison with baseline)
 
 Without further constraints, RFNBO scenarios respond to the certification rules partly
@@ -320,6 +335,43 @@ shipping load) are excluded by default
 per-carrier (preserves the product mix) and EU-level (spatial reallocation stays free).
 See `RFNBO_implementation_review.md` §3.7 for design rationale and validation.
 
+### Additionality = capacity + annual-PPA pair
+
+Per the Delegated Act (Art. 5(a)/(b), see `RFNBO_rules.md`), additionality is a
+*capacity-eligibility* rule (new assets) coupled with a *volumetric PPA-equivalence*
+rule (PPAs must cover the claimed MWh). The model mirrors this: whenever the
+per-country capacity constraint (`add_additionality_constraint`) is activated,
+the annual volumetric constraint (`add_annual_ppa_constraint`: post-2025-cohort VRE
+dispatch above the no-H₂ counterfactual ≥ electrolyser consumption, per country and
+year) is activated with it (`extra_functionality`). Because of capacity factors the
+volumetric constraint requires ≈ 2–4 GW of VRE per GW of electrolyser and is
+generally the binding one of the pair (review §9.1). The hourly temporal-correlation
+constraint implies the annual sum, so the explicit annual PPA matters most in
+`RFNBO_Add` (additionality without hourly matching); it is not added from the
+temporal-correlation branch (`RFNBO_Temp` stays hourly-only).
+
+### Non-RFNBO production cap (`non_rfnbo_h2_cap_2025`)
+
+The additionality/PPA and temporal-correlation constraints are conditional on
+electrolysers ("for every MW/MWh of electrolyser, matching additional VRE"): they
+regulate the **quality** of electrolytic H₂, not its **quantity** in the supply mix,
+so a zero-electrolyser, all-SMR solution satisfies them trivially (the fossil-backfill
+escape, review §6.4 E2). The flag `solving.constraints.non_rfnbo_h2_cap_2025`
+(default `true` in all RFNBO configs, `false` for baselines; replaces the former
+`smr_cap_2025`) caps EU-wide annual H₂ output of **all non-electrolytic production
+routes** at its level in the solved **baseline 2025** network (≈ 93 TWh; reference
+wired via `input_baseline_network_2025` in `rules/common.smk`, scenario-independent
+so the cap is identical across RFNBO variants). Producers are discovered
+**structurally** (`_find_h2_producing_link_ports`: link ports injecting into
+carrier-`H2` buses with positive efficiency, excluding `H2 Electrolysis` /
+`vre H2 Electrolysis`) — today SMR, SMR CC and ammonia cracker — so new
+non-electrolytic routes are covered automatically. Semantics: grandfathering — the
+2025 non-RFNBO quantity may persist, but combined with the endogenous H₂ demand
+floor all consumption growth beyond 2025 must be electrolytic and hence, under the
+other active constraints, RFNBO-compliant. If the exogenous `RFNBO_demand_share`
+is also enabled, the effective electrolytic share is the max of its trajectory and
+the cap-implied share (which rises toward 100 % as H₂ demand grows).
+
 ### RFNBO exemption criteria (deferred)
 
 The 90 % renewable-share and 18 gCO₂/MJ grid-intensity exemptions
@@ -328,6 +380,28 @@ in the quick-test chain: the computation in `get_vre_share_carbon_intensity()` h
 bugs (fuel- vs electricity-based CO₂ intensity, circular renewable-share definition) —
 see `RFNBO_implementation_review.md`. Until fixed, additionality and temporal
 correlation apply to all modelled countries in all active horizons.
+
+All RFNBO constraints (additionality, annual PPA, hourly and monthly temporal
+correlation) now share one exemption filter (`_rfnbo_active_countries` in
+`scripts/solve_network.py`): a country is exempt if it satisfies **either**
+criterion, i.e. the constraints apply to the **intersection** of the two
+non-compliant country sets (previously the temporal constraints checked only the
+VRE-share criterion).
+
+### CO₂ venting (`sector.co2_vent`)
+
+`co2_vent: true` in all eight scenario configs adds per-node vent links
+(`{node} co2 stored` → `co2 atmosphere`, upstream PyPSA-Eur option, created at
+**prepare** time — networks must be rebuilt). Without it, a binding sequestration
+cap forces captured CO₂ to be *utilized*, driving `co2 stored` prices deeply
+negative (−400 €/t at 2030) and financing the SMR→Sabatier loop (review §8.4).
+Vented CO₂ is charged to the **venting** country's national budget/price (link-name
+fallback in `add_co2limit_country`/`add_co2price_country`) while capture stays
+credited to the capture country, so cross-border "capture in A, vent in B" is a CO₂
+export from A and an emission in B; the EU-wide cap counts vented CO₂ too. Note
+venting is not free under binding national budgets: the `co2 stored` value floor is
+≈ −(cheapest national CO₂ price + transport). The CO₂ sankey and metrics do not yet
+show vent/trade flows (review §9.4, item 29).
 
 ### CO₂ payments in cost summaries
 

@@ -109,6 +109,7 @@ rule solve_sector_network_myopic:
         ),
         baseline_network=input_baseline_network,
         baseline_updated=input_baseline_updated,
+        baseline_network_2025=input_baseline_network_2025,
         co2_totals_name=lambda w: per_run_resource(w, "co2_totals.csv"),
         costs=input_costs_baseyear,
     output:

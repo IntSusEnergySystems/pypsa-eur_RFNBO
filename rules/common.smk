@@ -253,6 +253,16 @@ def input_baseline_updated(w):
     )
 
 
+def input_baseline_network_2025(w):
+    if not study_name(w).startswith("RFNBO"):
+        return []
+    if int(w.planning_horizons) <= 2025:
+        return []
+    return (
+        "results/baseline/networks/base_s_{clusters}_{opts}_{sector_opts}_2025.nc".format(**dict(w))
+    )
+
+
 def solved_previous_horizon(w):
     planning_horizons = config_provider("scenario", "planning_horizons")(w)
     i = planning_horizons.index(int(w.planning_horizons))
