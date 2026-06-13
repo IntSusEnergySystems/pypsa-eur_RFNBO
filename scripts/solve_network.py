@@ -207,7 +207,7 @@ def add_solar_potential_constraints(n: pypsa.Network, config: dict) -> None:
     }
     rename = {} if PYPSA_V1 else {"Generator-ext": "Generator"}
 
-    solar_carriers = ["solar", "solar-hsat","solar vre"]
+    solar_carriers = ["solar", "solar-hsat"]
     solar = n.generators[
         n.generators.carrier.isin(solar_carriers) & n.generators.p_nom_extendable
     ].index
@@ -216,8 +216,7 @@ def add_solar_potential_constraints(n: pypsa.Network, config: dict) -> None:
         (n.generators.carrier == "solar") & (n.generators.p_nom_extendable)
     ].index
     solar_hsat = n.generators[(n.generators.carrier == "solar-hsat")].index
-    if scenario != "baseline_without_H2":
-     solar_vre = n.generators[(n.generators.carrier == "solar vre")].index
+
     if solar.empty:
         return
 
@@ -227,75 +226,26 @@ def add_solar_potential_constraints(n: pypsa.Network, config: dict) -> None:
             lambda x: (x * factor) if carrier in x.name else x, axis=1
         )
 
-    ggrouper = n.generators.loc[solar].bus.str[:2]
-    if scenario != "baseline_without_H2":
-     rhs = (
+    location = pd.Series(n.buses.index, index=n.buses.index)
+    ggrouper = n.generators.loc[solar].bus
+    rhs = (
         n.generators.loc[solar_today, "p_nom_max"]
-        .groupby(n.generators.loc[solar_today].bus.map(n.buses.country))
+        .groupby(n.generators.loc[solar_today].bus.map(location))
         .sum()
         - n.generators.loc[solar_hsat, "p_nom"]
-        .groupby(n.generators.loc[solar_hsat].bus.map(n.buses.country))
-        .sum()
-        - n.generators.loc[solar_vre, "p_nom"]
-        .groupby(n.generators.loc[solar_vre].bus.map(n.buses.country))
+        .groupby(n.generators.loc[solar_hsat].bus.map(location))
         .sum()
         * land_use_factors["solar-hsat"]
-    ).clip(lower=0).replace(0, 1)
-    else:
-        rhs = (
-           n.generators.loc[solar_today, "p_nom_max"]
-           .groupby(n.generators.loc[solar_today].bus.map(n.buses.country))
-           .sum()
-           - n.generators.loc[solar_hsat, "p_nom"]
-           .groupby(n.generators.loc[solar_hsat].bus.map(n.buses.country))
-           .sum()
-           * land_use_factors["solar-hsat"]
-       ).clip(lower=0).replace(0, 1)
-   
+    ).clip(lower=0)
+
     lhs = (
         (n.model["Generator-p_nom"].rename(rename).loc[solar] * land_use.squeeze())
         .groupby(ggrouper)
         .sum()
     )
-    
+
     logger.info("Adding solar potential constraint.")
     n.model.add_constraints(lhs <= rhs, name="solar_potential")
-
-def add_onwind_potential_constraints(n: pypsa.Network, config: dict) -> None:
-    """
-    Add constraint to make sure the model considers vre connected electrolysers attached to onwind turbines.
-    """
-    rename = {} if PYPSA_V1 else {"Generator-ext": "Generator"}
-    onwind_carriers = ["onwind","onwind vre"]
-    onwind = n.generators[
-        n.generators.carrier.isin(onwind_carriers) & n.generators.p_nom_extendable
-    ].index
-
-    onwind_today = n.generators[
-        (n.generators.carrier == "onwind") & (n.generators.p_nom_extendable)
-    ].index
-    onwind_vre = n.generators[(n.generators.carrier == "onwind vre")].index
-    if onwind.empty:
-        return
-
-    ggrouper = n.generators.loc[onwind].bus.str[:2]
-    rhs = (
-        n.generators.loc[onwind_today, "p_nom_max"]
-        .groupby(n.generators.loc[onwind_today].bus.map(n.buses.country))
-        .sum()
-        - n.generators.loc[onwind_vre, "p_nom"]
-        .groupby(n.generators.loc[onwind_vre].bus.map(n.buses.country))
-        .sum()
-    ).clip(lower=0).replace(0, 1)
-    
-    lhs = (
-        (n.model["Generator-p_nom"].rename(rename).loc[onwind])
-        .groupby(ggrouper)
-        .sum()
-    )
-    
-    logger.info("Adding onwind potential constraint.")
-    n.model.add_constraints(lhs <= rhs, name="onwind_potential")
     
 def add_co2_sequestration_limit(
     n: pypsa.Network,
@@ -2905,9 +2855,6 @@ def extra_functionality(
         ).any():
             add_TES_energy_to_power_ratio_constraints(n)
             add_TES_charger_ratio_constraints(n)
-    if scenario != "baseline_without_H2":
-     if investment_year > 2025:
-      add_onwind_potential_constraints(n, config)
     add_battery_constraints(n)
     add_lossy_bidirectional_link_constraints(n)
     add_pipe_retrofit_constraint(n)
