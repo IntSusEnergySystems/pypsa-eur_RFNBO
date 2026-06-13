@@ -2186,6 +2186,7 @@ def add_h2_gas_infrastructure(
                 )
 
     if options["H2_retrofit"]:
+     if investment_year >= 2035:
         logger.info("Add retrofitting options of existing CH4 pipes to H2 pipes.")
 
         fr = "gas pipeline"
@@ -2209,6 +2210,7 @@ def add_h2_gas_infrastructure(
         )
 
     if options["H2_network"]:
+     if investment_year >= 2035:
         logger.info("Add options for new hydrogen pipelines.")
 
         h2_pipes = create_network_topology(
