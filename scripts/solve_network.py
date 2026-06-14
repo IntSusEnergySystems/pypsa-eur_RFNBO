@@ -1755,17 +1755,17 @@ def get_vre_share_carbon_intensity(country):
         "co2_intensity": total_co2_intensity,
     }   
 
-
-def _rfnbo_active_countries(common_countries, log_prefix="RFNBO constraint"):
+def _rfnbo_active_countries(common_countries, criterion_type="both", log_prefix="RFNBO constraint"):
     if isinstance(common_countries, set):
         base = common_countries
     else:
         base = set(common_countries)
 
-    if (
-        constraints["activate_vre_share_criterion"]
-        and constraints["activate_carbon_intensity_criterion"]
-    ):
+    #force flags based on the required criterion_type
+    check_vre = constraints["activate_vre_share_criterion"] if criterion_type in ["both", "vre"] else False
+    check_carbon = constraints["activate_carbon_intensity_criterion"] if criterion_type in ["both", "carbon"] else False
+
+    if check_vre and check_carbon:
         if previous_horizon_data is None:
             active_countries = base
         else:
@@ -1775,16 +1775,16 @@ def _rfnbo_active_countries(common_countries, log_prefix="RFNBO constraint"):
             df = pd.DataFrame(stats).set_index("country")
             vre_noncompliant = df.index[df["renewable_share"] < level_vre]
             intensity_noncompliant = df.index[df["co2_intensity"] > level_intensity]
-            eligible_countries = set(vre_noncompliant).intersection(
+            eligible_countries = set(vre_noncompliant).union(
                 set(intensity_noncompliant)
             )
             active_countries = base.intersection(eligible_countries)
         logger.info(
             f"{log_prefix} applied to countries "
-            f"not complying with both VRE share and carbon intensity criterion: "
+            f"not complying with either VRE share or carbon intensity criterion: "
             f"{', '.join(sorted(active_countries))}"
         )
-    elif constraints["activate_vre_share_criterion"]:
+    elif check_vre:
         if previous_horizon_data is None:
             active_countries = base
         else:
@@ -1798,7 +1798,7 @@ def _rfnbo_active_countries(common_countries, log_prefix="RFNBO constraint"):
             f"not having required VRE share in total generation: "
             f"{', '.join(sorted(active_countries))}"
         )
-    elif constraints["activate_carbon_intensity_criterion"]:
+    elif check_carbon:
         if previous_horizon_data is None:
             active_countries = base
         else:
@@ -1822,8 +1822,8 @@ def _rfnbo_active_countries(common_countries, log_prefix="RFNBO constraint"):
     if isinstance(common_countries, set):
         return active_countries
     return sorted(active_countries)
-
-
+    
+    
 def add_additionality_constraint(n: pypsa.Network):
     """
     This constraint will add additionality constraint in RFNBO scenario activated via config file.
@@ -1890,7 +1890,7 @@ def add_additionality_constraint(n: pypsa.Network):
     lhs_countries = vre_cap.indexes["country"]
     common_countries = lhs_countries.intersection(rhs.index)
     active_countries = _rfnbo_active_countries(
-        common_countries, log_prefix="Additionality constraint"
+        common_countries,criterion_type="both", log_prefix="Additionality constraint"
     )
 
     #skip constraint if all countries already satisfy VRE share
@@ -2119,7 +2119,7 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
     set(rhs_xr.country.values))
     
     active_countries = _rfnbo_active_countries(
-        common_countries, log_prefix="Temporal constraint hourly"
+        common_countries,criterion_type="vre", log_prefix="Temporal constraint hourly"
     )
     active_countries = list(active_countries)
     if len(active_countries) == 0:
@@ -2191,7 +2191,7 @@ def add_annual_ppa_constraint(n: pypsa.Network, sns: pd.DatetimeIndex):
     set(rhs_xr.country.values))
 
     active_countries = _rfnbo_active_countries(
-        common_countries, log_prefix="Annual PPA constraint"
+        common_countries,criterion_type="vre", log_prefix="Annual PPA constraint"
     )
     active_countries = list(active_countries)
     if len(active_countries) == 0:
@@ -2326,7 +2326,7 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
         set(rhs_xr.coords["country"].values)
     )
     active_countries = _rfnbo_active_countries(
-        common_countries, log_prefix="Temporal constraint monthly"
+        common_countries,criterion_type="vre", log_prefix="Temporal constraint monthly"
     )
     active_countries = list(active_countries)
     
