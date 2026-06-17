@@ -859,11 +859,14 @@ plotting:
     vre battery charger: "#9a0200"
     vre battery discharger: "#9a0200"
     vre H2 Electrolysis: '#11875d'
-    solar vre: "#9a0200"
-    onwind vre: "#ffbacd"
-    offwind-ac vre: "#c14a09"
-    offwind-dc vre: '#ffb07c'
+    solar Electrolysis: "#9a0200"
+    onwind Electrolysis: "#ffbacd"
+    offwind-ac Electrolysis: "#c14a09"
+    offwind-dc Electrolysis: '#ffb07c'
     Direct Connected Electrolysers: '#11875d'
-    solar rfnbo: "#9a0200"
-    onshore rfnbo: "#ffbacd"
-    offshore rfnbo: "#c14a09"
+    solar H2: "#9a0200"
+    onshore H2: "#ffbacd"
+    offshore H2: "#c14a09"
+    hybrid H2: '#B98F76'
+    non-EU H2 imports: '#db8ccd'
+    solar-onwind Electrolysis: '#45233b'

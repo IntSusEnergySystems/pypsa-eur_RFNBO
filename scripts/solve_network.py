@@ -2655,55 +2655,102 @@ def _warn_max_growth_additionality_headroom(
             vre_cap_gw,
         )
 
-
 def add_max_growth_constraint(n: pypsa.Network) -> None:
     """
     Cap EU-wide new capacity per carrier for the current myopic planning horizon.
-
+    Direct connected electrolysers connected vre  also added tobe considered for each carrier.
     In myopic runs, extendable components represent new builds only; previous
     capacity is fixed via add_brownfield. Limits are absolute (GW per horizon),
     not relative growth rates.
     """
     mg_cfg = constraints.get("max_growth") or {}
     carrier_caps_gw = mg_cfg.get("carriers") or {}
+    oversize_factor = constraints.get("oversize_factor") or {}
+
     if not carrier_caps_gw:
         logger.warning("max_growth enabled but no carriers configured; skipping")
         return
 
+    #consider only extendable links and generators
+    ext_gens = n.generators[n.generators.p_nom_extendable]
+    ext_links = n.links[n.links.p_nom_extendable]
+
     for carrier, cap_gw in carrier_caps_gw.items():
         cap_mw = cap_gw * 1e3
-        gen_idx = n.generators[
-            n.generators.p_nom_extendable & (n.generators.carrier == carrier)
-        ].index
-        link_idx = n.links[
-            n.links.p_nom_extendable & (n.links.carrier == carrier)
-        ].index
+        lhs_terms = []
+        num_gens = 0
+        num_links = 0
+        if carrier == "H2 Electrolysis":
+            #grid-connected electrolyzers modelled as links
+            link_idx = ext_links[ext_links.carrier == carrier].index
+            if not link_idx.empty:
+                lhs_terms.append(n.model["Link-p_nom"].loc[link_idx].sum())
+                num_links += len(link_idx)
+            #direct connected electrolyzer modelled as generators
+            h2_gen_idx = ext_gens[
+                ext_gens.carrier.str.endswith("Electrolysis")
+            ].index
+            if not h2_gen_idx.empty:
+                #convert output capacity MW_h2 to MW_el as links p-nom captures that
+                gen_eff = ext_gens.loc[h2_gen_idx, "efficiency"]
+                h2_gen_term = (
+                    n.model["Generator-p_nom"].loc[h2_gen_idx] / gen_eff
+                ).sum()
+                lhs_terms.append(h2_gen_term)
+                num_gens += len(h2_gen_idx)
 
-        if gen_idx.empty and link_idx.empty:
+        #VRE techs
+        else:
+            #grid generators
+            gen_idx = ext_gens[ext_gens.carrier == carrier].index
+            if not gen_idx.empty:
+                lhs_terms.append(n.model["Generator-p_nom"].loc[gen_idx].sum())
+                num_gens += len(gen_idx)
+            #direct-connected standalone H2 plants matching this carrier
+            direct_gen_idx = ext_gens[
+                ext_gens.carrier == f"{carrier} Electrolysis"
+            ].index
+            if not direct_gen_idx.empty:
+                factor = oversize_factor.get(carrier, 1.0)
+                #convert MW_h2 output back to physical VRE capacity built
+                direct_term = (
+                    n.model["Generator-p_nom"].loc[direct_gen_idx].sum()
+                    * factor
+                )
+                lhs_terms.append(direct_term)
+                num_gens += len(direct_gen_idx)
+            #hybrid plants basedon solar + onwind
+            #if carrier is "solar" or "onwind", it must count towards its respective limit
+            hybrid_gen_idx = ext_gens[
+                ext_gens.carrier == "solar-onwind Electrolysis"
+            ].index
+            if not hybrid_gen_idx.empty and carrier in ["solar", "onwind"]:
+                hybrid_term = (
+                    n.model["Generator-p_nom"].loc[hybrid_gen_idx].sum()
+                )
+                lhs_terms.append(hybrid_term)
+                num_gens += len(hybrid_gen_idx)
+        if not lhs_terms:
             logger.debug(
-                "max_growth: no extendable assets for carrier %s; skipping", carrier
+                "max_growth: no extendable assets for carrier group %s; skipping",
+                carrier,
             )
             continue
 
-        lhs_terms = []
-        if not gen_idx.empty:
-            lhs_terms.append(n.model["Generator-p_nom"].loc[gen_idx].sum())
-        if not link_idx.empty:
-            lhs_terms.append(n.model["Link-p_nom"].loc[link_idx].sum())
-        lhs = lhs_terms[0] if len(lhs_terms) == 1 else sum(lhs_terms)
-
+        lhs = sum(lhs_terms) if len(lhs_terms) > 1 else lhs_terms[0]
+        
         n.model.add_constraints(lhs <= cap_mw, name=f"max_growth-{carrier}")
+
         logger.info(
             "max_growth: carrier %s capped at %.0f GW (%d generators, %d links)",
             carrier,
             cap_gw,
-            len(gen_idx),
-            len(link_idx),
+            num_gens,
+            num_links,
         )
 
-    _warn_max_growth_additionality_headroom(carrier_caps_gw)
-
-
+        _warn_max_growth_additionality_headroom(carrier_caps_gw)
+        
 def add_non_rfnbo_h2_cap_constraint(n: pypsa.Network) -> None:
     """
     Cap EU-wide annual non-RFNBO hydrogen production at the baseline 2025 level.

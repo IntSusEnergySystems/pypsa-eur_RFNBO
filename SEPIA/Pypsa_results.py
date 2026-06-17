@@ -44,14 +44,14 @@ def rename_techs_tyndp(tech):
         return "power-to-heat"
     elif tech in ["H2 Electrolysis"]:
         return "Electrolysers"
+    elif tech in ["Import H2"]:
+        return "non-EU H2 imports"
     elif tech in ["geothermal district heat","geothermal organic rankine cycle","geothermal heat"]:
         return "geothermal"
-    elif tech in ["vre H2 Electrolysis"]:
-        return "Direct Connected Electrolysers"
     elif tech in ["FLC Electrolysis"]:
         return "FLC Electrolysers"
-    elif tech in ["solar Electrolyser","onwind Electrolyser","offwind-ac Electrolyser","offwind-dc Electrolyser"]:
-        return "VRE connected Electrolysers"
+    elif tech in ["solar Electrolysis","onwind Electrolysis","offwind-ac Electrolysis","offwind-dc Electrolysis","solar-onwind Electrolysis"]:
+        return "Direct Connected Electrolysers"
     elif tech in ["electricity distribution grid"]:
         return "distribution network"
     elif tech in [ "CHP", "H2 Fuel Cell","H2 turbine"]:
@@ -68,7 +68,7 @@ def rename_techs_tyndp(tech):
         return "offshore wind"
     elif tech in ["onshore wind", "onwind vre"]:
         return "onshore wind"
-    elif tech in ["co2 sequestered","CO2 sequestration", "co2", "SMR CC", "process emissions CC","process emissions", "solid biomass for industry CC", "gas for industry CC","CO2 pipeline"]:
+    elif tech in ["co2 sequestered","CO2 sequestration", "co2", "SMR CC", "process emissions CC","process emissions", "solid biomass for industry CC", "gas for industry CC","CO2 pipeline","co2 vent"]:
          return "CCUS"
     elif tech in ["biomass", "solid biomass", "solid biomass for industry", "biogas", "solid biomass transport", "biomass exports", "biogas exports","municipal solid waste","municipal solid waste transport","solid biomass powerplants","biomass-to-methanol","unsustainable bioliquids","unsustainable solid biomass"]:
           return "biomass fuel & techs"
@@ -518,7 +518,7 @@ def clustered_costs(countries):
         return "Networks"
     elif tech in ["solar","solar PV","onshore wind","offshore wind","nuclear","hydroelectricity","biomass fuel & techs","CHP","geothermal"]:
         return "Power Plants"
-    elif tech in ["Electricity Imports/Exports","Hydrogen Imports/Exports","Fossil fuels & powerplants"]:
+    elif tech in ["Electricity Imports/Exports","Hydrogen Imports/Exports","Fossil fuels & powerplants","non-EU H2 imports"]:
           return "Imports"
     else:
         return tech
@@ -633,7 +633,7 @@ def rename_techs_tynd(tech):
                 "hydroelectricity","SMR", "ammonia cracker", "Haber-Bosch", "BioSNG", "biomass to liquid","methanol","ammonia","methanolisation","shipping methanol","non-sequestered HVC","offshore wind (Float)","solar-hsat","water pits",
                 "air heat pump","air-sourced heat pump","ground heat pump","solar PV","solar rooftop", "offshore wind","offshore wind (AC)", "offshore wind (DC)","solid biomass to hydrogen","water pits charger","water pits discharger",
                 "onshore wind", "solar thermal","H2 pipeline", "gas pipeline","gas pipeline new","H2 pipeline retrofitted","transmission lines","Transmission Lines","biomass-to-methanol","industry methanol", "OCGT methanol","CO2 pipeline",
-                "solar vre","onwind vre","offwind-ac vre","offwind-dc vre","vre H2 Electrolysis","geothermal"]:
+                "solar Electrolysis","onwind Electrolysis","offwind-ac Electrolysis","offwind-dc Electrolysis","solar-onwind Electrolysis","geothermal","co2 vent"]:
         return "VOM of Technologies"
     elif tech in ["biomass", "solid biomass", "solid biomass for industry", "biogas", "solid biomass transport", "biomass exports", "biogas exports","solid biomass import","biomass-to-methanol","unsustainable bioliquids","unsustainable solid biomass"]:
           return "Biomass"
@@ -645,6 +645,8 @@ def rename_techs_tynd(tech):
         return "Electricity Imports/Exports"
     elif "hydrogen imports/exports" in tech:
         return "Hydrogen Imports/Exports"
+    elif tech in ["Import H2"]:
+        return "non-EU H2 imports"
     elif tech in ["uranium", "nuclear", "nuclear fuel"]:
           return "Nuclear"
     elif tech in ["methanol exports", "ammonia exports"]:
@@ -817,10 +819,8 @@ def rename_techs_tyndpp(tech):
         return "power-to-heat"
     elif tech in ["H2 Electrolysis"]:
         return "Electrolysers"
-    elif tech in ["vre H2 Electrolysis"]:
-        return "Direct Connected Electrolysers"
-    elif tech in ["solar Electrolyser","onwind Electrolyser","offwind-ac Electrolyser","offwind-dc Electrolyser"]:
-        return "VRE connected Electrolysers"
+    elif tech in ["Import H2"]:
+        return "non-EU H2 imports"
     elif tech in ["electricity distribution grid"]:
         return "distribution network"
     elif tech in [ "CHP", "H2 Fuel Cell","H2 turbine"]:
@@ -831,14 +831,16 @@ def rename_techs_tyndpp(tech):
         return "offshore wind"
     elif tech in ["onshore wind"]:
         return "onshore wind"
-    elif tech in ["solar vre"]:
-        return "solar rfnbo"
+    elif tech in ["solar Electrolysis"]:
+        return "solar H2"
     elif tech == "Fischer-Tropsch":
         return "power-to-liquid"
-    elif tech in ["offwind-ac vre","offwind-dc vre"]:
-        return "offshore rfnbo"
-    elif tech in ["onwind vre"]:
-        return "onshore rfnbo"
+    elif tech in ["offwind-ac Electrolysis","offwind-dc Electrolysis"]:
+        return "offshore H2"
+    elif tech in ["onwind Electrolysis"]:
+        return "onshore H2"
+    elif tech in ["solar-onwind Electrolysis"]:
+        return "hybrid H2"
     elif tech in ["hot water storage","water pits","water pits charger","water pits discharger"]:
         return "thermal energy storage"
     elif "load" in tech:
@@ -865,6 +867,11 @@ def capacities(countries,results):
       columns_to_convert = ['2025','2030','2035', '2040','2045','2050']
       cf[columns_to_convert] = cf[columns_to_convert].apply(pd.to_numeric, errors='coerce')
       cf = cf.groupby('tech').sum().reset_index()
+      #convert H2 electrolysys capacity from GW el to GW H2 as direct connected are already in GWH2
+      eff_electrolyser = options.loc[("electrolysis", "efficiency")].item()
+      mask = cf["tech"].str.contains("H2 Electrolysis", case=False, na=False)
+      cf.loc[mask, columns_to_convert] = (
+        cf.loc[mask, columns_to_convert] * eff_electrolyser)
       if 'nuclear' not in cf['tech'].values:
           new_row = pd.DataFrame(
               [['nuclear'] + [0]*len(planning_horizons)],
@@ -2927,10 +2934,10 @@ def create_capacity_chart(capacities, country, unit='Capacity [GW]'):
     tech_colors["DC Transmission"] = "#104E8B"
     tech_colors["Transmission lines"] = tech_colors["Transmission Lines"]
     groups = [
-        ["solar","solar rfnbo"],
+        ["solar"],
         ["onshore wind", "offshore wind"],
-        ["onshore rfnbo", "offshore rfnbo"],
-        ["Electrolysers","Direct Connected Electrolysers"],
+        ["solar H2","onshore H2", "offshore H2","hybrid H2"],
+        ["Electrolysers","solar H2","onshore H2", "offshore H2","hybrid H2"],
         ["transmission lines"],
         ["nuclear"],
         ["CCGT"],
@@ -2938,10 +2945,10 @@ def create_capacity_chart(capacities, country, unit='Capacity [GW]'):
     ]
     
     groupss = [
-        ["solar","solar rfnbo"],
+        ["solar"],
         ["onshore wind", "offshore wind"],
-        ["onshore rfnbo", "offshore rfnbo"],
-        ["Electrolysers","Direct Connected Electrolysers"],
+        ["solar H2","onshore H2", "offshore H2","hybrid H2"],
+        ["Electrolysers","solar H2","onshore H2", "offshore H2","hybrid H2"],
         ["transmission lines"],
         ["power-to-liquid"],
         ["CCGT"],
@@ -2984,7 +2991,7 @@ def create_capacity_chart(capacities, country, unit='Capacity [GW]'):
         fig.update_xaxes(tickfont=dict(size=13), row=row, col=col)
         fig.update_yaxes(
             tickfont=dict(size=13),
-            title_font=dict(size=15),
+            title_font=dict(size=7),
             row=row,
             col=col
         )
@@ -3009,7 +3016,7 @@ def storage_capacity_chart(s_capacities, country, unit='Capacity [GWh]'):
     years = ['2025','2030','2035', '2040','2045', '2050']
     fig = make_subplots(rows=1, cols=len(groups) // 1, subplot_titles=[
         f"{', '.join(tech_group)}" for tech_group in groups], shared_yaxes=False)
-
+    fig.update_annotations(font_size=8)
     df = s_capacities[country]
 
     for i, tech_group in enumerate(groups, start=1):

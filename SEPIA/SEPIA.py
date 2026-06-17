@@ -37,8 +37,8 @@ def biomass_potentials():
             biomass_p.index = biomass_p.index.str[:2]
             biomass_p = biomass_p.groupby(biomass_p.index).sum()
             # Assign the summed biomass potential for the country and planning horizon to the DataFrame
-            df.loc[planning_horizon, country] = biomass_p.loc[country, 'solid biomass']
-            df.loc[planning_horizon, "EU"] = biomass_p["solid biomass"].sum()
+            df.loc[planning_horizon, country] = biomass_p.loc[country, ['solid biomass','unsustainable solid biomass']].sum()
+            df.loc[planning_horizon, "EU"] = biomass_p[["solid biomass","unsustainable solid biomass"]].sum().sum()
 
     return df
 
