@@ -1775,13 +1775,13 @@ def _rfnbo_active_countries(common_countries, criterion_type="both", log_prefix=
             df = pd.DataFrame(stats).set_index("country")
             vre_noncompliant = df.index[df["renewable_share"] < level_vre]
             intensity_noncompliant = df.index[df["co2_intensity"] > level_intensity]
-            eligible_countries = set(vre_noncompliant).union(
+            eligible_countries = set(vre_noncompliant).intersection(
                 set(intensity_noncompliant)
             )
             active_countries = base.intersection(eligible_countries)
         logger.info(
             f"{log_prefix} applied to countries "
-            f"not complying with either VRE share or carbon intensity criterion: "
+            f"not complying with both VRE share and carbon intensity criterion: "
             f"{', '.join(sorted(active_countries))}"
         )
     elif check_vre:

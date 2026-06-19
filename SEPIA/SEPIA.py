@@ -274,23 +274,6 @@ def prepare_sepia(countries, flows_only=False):
         flows[('imp',en_code + '_se', '')] = values_imp
         flows[(en_code+'_se','exp','')] = values_exp
         
-    other_imports = flows.columns.get_level_values('Target').isin(FE_NODES)
-    other_imports = flows.loc[:, other_imports]
-    other_imports = other_imports.groupby(level='Target', axis=1).sum() 
-    if country != 'EU':
-     for en_code in ['amm','met']:
-        values_elec = flows[('elc_se',en_code + '_fe', '')].squeeze().rename_axis(None)
-        values_bm = flows[('enc_pe',en_code + '_fe', '')].squeeze().rename_axis(None)
-        flows[('met_fe','per', '')] = values_elec
-        values_exp = other_imports[en_code + '_fe'] - fec_pe[en_code + '_fe'] - values_elec - values_bm
-        values_imp = fec_pe[en_code + '_fe'] - other_imports[en_code + '_fe'] - values_elec - values_bm
-        values_imp = values_imp.clip(lower=0)
-        values_exp = values_exp.clip(lower=0)
-        flows[('imp',en_code + '_fe', '')] = values_imp
-        flows[(en_code+'_fe','exp','')] = values_exp
-    else:
-        values_elec = flows[('elc_se','met_fe', '')].squeeze().rename_axis(None)
-        flows[('met_fe','per', '')] = values_elec
     '''preparing co2 emissions for carbon sankey'''
     tot_emm_s = flows_co2.columns.get_level_values('Source').isin(GHG_SECTORS)
     tot_emm_s = flows_co2.loc[:, tot_emm_s]
