@@ -188,6 +188,22 @@ The individual scenario configs (`config.baseline.yaml`, `config.RFNBO_*.yaml`, 
 
 Shipped quick-test defaults: **BE** and **FR**, **2** clusters, **`6H`** resolution, Gurobi **8** threads, solve memory **90** GB (`mem_mb: 90000`). To change countries, resolution, or memory, edit `config/config.quick_test_chain.yaml` directly. Keep `scenario.clusters` equal to the number of countries so result paths stay consistent (e.g. `base_s_2__6H_2030.nc`).
 
+**BE+FR calibration (required for feasible solves):** national CO₂ budgets in
+`config/config.quick_test_chain.yaml` are relaxed relative to the full-Europe
+trajectory (2030: 0.55, 2035: 0.40, …, 2050: 0.05 of 1990 per country). The
+full-Europe caps are near-infeasible for a two-country subset and produce
+pathological CO₂ duals (≈ 10⁴ €/t) that make RFNBO runs unbounded. Per-scenario
+overrides in `config/scenarios.quick_test_chain.yaml` disable **hourly** temporal
+correlation for `RFNBO_CR` (the no-H₂ counterfactual dispatch baseline is
+incompatible with the RFNBO load/build at this scale); **annual PPA** still applies
+via the additionality pairing, and **monthly** correlation still runs at 2025.
+Use the full-country configs for hourly temporal validation.
+
+**Solver safeguards:** quick-test Gurobi options include, `DualReductions: 0`, and `BarHomogeneous: 1`. `scripts/solve_network.py` rejects
+infeasible/unbounded/time-limit terminations and pathologically negative objectives
+before exporting a network, so a bad solve fails in minutes instead of hanging for
+hours.
+
 ### 2. Run the test chain (recommended — single Snakemake)
 
 [`Snakefile_quick_test_chain`](Snakefile_quick_test_chain) runs **baseline**, **baseline_without_H2**, and **RFNBO_CR** (additionality + temporal + monthly correlation) in one invocation. Shared electricity preprocessing is built once (`run.shared_resources.policy: base`); per-scenario solve logs are kept separately under `logs/{run}/` and `results/{run}/logs/`.
@@ -195,7 +211,8 @@ Shipped quick-test defaults: **BE** and **FR**, **2** clusters, **`6H`** resolut
 ```bash
 conda activate pypsa-eur
 
-snakemake --snakefile Snakefile_quick_test_chain --cores 8 -call
+snakemake --snakefile Snakefile_quick_test_chain --cores 8 -n     # dry run
+snakemake --snakefile Snakefile_quick_test_chain --cores 8 -call  # execute (-call, not -callall)
 ```
 
 `rule all` builds solved networks and SEPIA HTML dashboards for BE, FR, and EU under `results/{run}/htmls/` (e.g. `results/baseline/htmls/BE_demands_baseline.html`). To skip post-processing, target a single `.nc` file as below.
