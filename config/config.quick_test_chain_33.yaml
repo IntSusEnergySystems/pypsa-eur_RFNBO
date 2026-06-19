@@ -1063,9 +1063,9 @@ sector:
   co2_sequestration_potential:
     2020: 0
     2025: 0
-    2030: 40
-    2035: 100
-    2040: 180
+    2030: 100
+    2035: 150
+    2040: 200
     2045: 250
     2050: 250
   co2_sequestration_cost: 30
@@ -1169,15 +1169,23 @@ sector:
     max_amount: 1390
     upstream_emissions_factor: 0.1
   imports:
-    enable: false
-    limit: .inf
-    limit_sense: "<="
+    enable: true
+    limit:
+      2025: 0.0
+      2030: 133.0
+      2035: 133.0
+      2040: 133.0
+      2045: 133.0
+      2050: 133.0    #https://energy.ec.europa.eu/topics/eus-energy-system/hydrogen_en
+    limit_sense: "<=" #10 million tonnes (Mt) of renewable hydrogen imports by 2030. Based on the lower heating value of hydrogen of roughly 33.33 kWh/kg, this equates to an energy volume of approximately 333 TWh. Here considering 4Mtons as suggested by EDF.
     price:
-      H2: 74
-      NH3: 97
-      methanol: 121
-      gas: 122
-      oil: 125
+      H2:
+        2025: 250.0 #https://www.ewi.uni-koeln.de/en/news/hydrogen-production-in-the-eu-is-cheaper-than-imports-by-ship/
+        2030: 250.0
+        2035: 250.0
+        2040: 250.0
+        2045: 250.0
+        2050: 250.0   
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
 industry:

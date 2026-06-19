@@ -1360,7 +1360,7 @@ def add_import_limit_constraint(n: pypsa.Network, sns: pd.DatetimeIndex):
     import_links = n.links.loc[n.links.carrier.str.contains("import")].index
     import_gens = n.generators.loc[n.generators.carrier.str.contains("import")].index
 
-    limit = n.config["sector"]["imports"]["limit"]
+    limit = n.config["sector"]["imports"]["limit"][investment_year]
     limit_sense = n.config["sector"]["imports"]["limit_sense"]
 
     if (import_links.empty and import_gens.empty) or not np.isfinite(limit):

@@ -9,7 +9,7 @@ See docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#sector
 """
 
 from typing import Any
-
+from typing import Union
 from pydantic import BaseModel, ConfigDict, Field
 
 from scripts.lib.validation.config._base import ConfigModel
@@ -347,18 +347,19 @@ class _ImportsConfig(BaseModel):
     enable: bool = Field(
         False, description="Add option to include renewable energy imports."
     )
-    limit: float = Field(
-        float("inf"), description="Maximum allowed renewable energy imports (TWh)."
-    )
+    limit: Union[float, dict[int, float]] = Field(
+    float("inf"),
+    description="Maximum allowed renewable energy imports (TWh).",
+)
     limit_sense: str = Field("<=", description="Sense of the limit.")
-    price: dict[str, float] = Field(
-        default_factory=lambda: {
-            "H2": 74,
-            "NH3": 97,
-            "methanol": 121,
-            "gas": 122,
-            "oil": 125,
-        },
+    price: dict[str, Union[float, dict[int, float]]] = Field(
+    default_factory=lambda: {
+        "H2": 74,
+        "NH3": 97,
+        "methanol": 121,
+        "gas": 122,
+        "oil": 125,
+    },
         description="Price for importing renewable energy of carrier.",
     )
 

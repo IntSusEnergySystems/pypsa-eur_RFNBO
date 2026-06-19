@@ -6223,7 +6223,6 @@ def add_import_options(
             )
 
     if "H2" in import_options:
-     if investment_year > 2025:
         p_nom = gas_input_nodes["pipeline"].dropna()
         p_nom.rename(lambda x: x + " H2", inplace=True)
 
@@ -6234,7 +6233,7 @@ def add_import_options(
             bus=p_nom.index,
             carrier="import H2",
             p_nom=p_nom,
-            marginal_cost=import_options["H2"],
+            marginal_cost=import_options["H2"][investment_year],
         )
 
 
