@@ -200,7 +200,7 @@ def process_network(cluster, opt, sector_opt, planning_horizon, country):
                 x.index.str.contains("carrier_bus") & ~x.str.contains("co2", na=False)
                 ].index.str.replace("carrier_bus", "total_e")
             return -x.loc[energy_ports].sum()
-
+        country_links = n.links.index[n.links.index.str.startswith(country)]
         if country != 'EU':
           n.links[f"total_e{max_i}"] = (n.links.apply(calculate_losses, axis=1).loc[country_links])
         else:
@@ -222,27 +222,28 @@ def process_network(cluster, opt, sector_opt, planning_horizon, country):
         hp = n.links.loc[n.links.carrier.str.contains("heat pump")]
 
         if country != 'EU':
-          hp_t_elec = n.links_t.p0.filter(like="heat pump").filter(like=country)
+          hp_t_elec = n.links_t.p1.filter(like="heat pump").filter(like=country)
         else:
-          hp_t_elec = n.links_t.p0.filter(like="heat pump")
+          hp_t_elec = n.links_t.p1.filter(like="heat pump")
 
         grouper = [hp["carrier"], hp["carrier_bus0"], hp["carrier_bus1"]]
         if country != 'EU':
-          hp_elec = (
-            (-n.snapshot_weightings.generators @ hp_t_elec).filter(like=country)
-            .groupby(grouper)
-            .sum()
-            .div(1e6)
-            .reset_index()
-        )
+           hp_elec = (
+           (n.snapshot_weightings.generators @ hp_t_elec).filter(like=country)
+           .groupby(grouper)
+           .sum()
+           .div(1e6)
+           .mul(-1)
+           .reset_index())
         else:
-          hp_elec = (
-            (-n.snapshot_weightings.generators @ hp_t_elec)
-            .groupby(grouper)
-            .sum()
-            .div(1e6)
-            .reset_index()
-        )
+           hp_elec = (
+           (n.snapshot_weightings.generators @ hp_t_elec)
+           .groupby(grouper)
+           .sum()
+           .div(1e6)
+           .mul(-1)
+           .reset_index())
+           
         hp_elec.columns = columns
 
         df = df.loc[~(df.label.str.contains("heat pump") & (df.target == "losses"))]
@@ -250,18 +251,14 @@ def process_network(cluster, opt, sector_opt, planning_horizon, country):
         df.loc[df.label.str.contains("heat pump"), "value"] -= hp_elec["value"].values
 
         df.loc[df.label.str.contains("air heat pump"), "source"] = "air-sourced ambient"
-        df.loc[
-            df.label.str.contains("ground heat pump"), "source"
-        ] = "ground-sourced ambient"
+        df.loc[df.label.str.contains("ground heat pump"), "source"] = "ground-sourced ambient"
 
         df = pd.concat([df, hp_elec])
         df = df.set_index(["label", "source", "target"]).squeeze()
         df = pd.concat(
-            [
-                df.loc[df < 0].mul(-1),
-                df.loc[df > 0].swaplevel(1, 2),
-            ]
-        ).reset_index()
+           [
+        df.loc[df < 0].mul(-1),
+        df.loc[df > 0].swaplevel(1, 2),]).reset_index()
         df.columns = columns
 
         # make DAC demand
@@ -379,7 +376,8 @@ entries_to_select = ['solar', 'solar rooftop', 'onwind','solar-hsat',
                       'solid biomass for industry CC_2','waste CHP_3','waste CHP CC_3','electrobiofuels_3',
                       'naphtha for industry_4','coal for industry_2','land transport oil_2','oil','oil_2',
                       'urban decentral biomass boiler','urban decentral biomass boiler_2',
-                      'rural biomass boiler','urban decentral resistive heater','biomass to liquid_2']  # Add moe entries if needed
+                      'rural biomass boiler','urban decentral resistive heater','biomass to liquid_2',
+                      'rural air heat pump','rural air heat pump_2']  # Add moe entries if needed
   
 
 
@@ -429,9 +427,9 @@ entry_label_mapping = {
     'methanolisation_3': {'label': 'Transformation losses (methanolisation)', 'source': 'TWh', 'target': 'lossmet'},
     'methanolisation_4': {'label': 'electricity to methanol', 'source': 'TWh', 'target': 'pretareen'},
     'methanolisation_2': {'label': 'waste heat methanolisation', 'source': 'TWh', 'target': 'prehdvap'},
-    'Haber-Bosch_3': {'label': 'Production losses of ammonia)', 'source': 'TWh', 'target': 'prohydclam'},
+    'Haber-Bosch_3': {'label': 'Production losses of ammonia', 'source': 'TWh', 'target': 'prohydnh'},
     'Haber-Bosch_2': {'label': 'haberbosch waste heat', 'source': 'TWh', 'target': 'prohydvap'},
-    'Haber-Bosch_4': {'label': 'Production of ammonia from H2)', 'source': 'TWh', 'target': 'prohydclammt'},
+    'Haber-Bosch_4': {'label': 'Production of ammonia from H2', 'source': 'TWh', 'target': 'proamclammt'},
     'urban decentral biomass boiler_2': {'label': 'Transformation losses (solid biomass boilers)',
                                                       'source': 'TWh', 'target': 'lossbbb'},
     'rural gas boiler_2': {'label': 'Transformation losses rural gas boiler', 'source': 'TWh',
@@ -460,8 +458,12 @@ entry_label_mapping = {
                                       'target': 'prespetcfres'},
     'urban decentral oil boiler': {'label': 'urban decentral oil boiler', 'source': 'TWh',
                                                 'target': 'prespetcfo'},
+    'rural air heat pump': {'label': 'rural air heat pump',
+                                        'source': 'TWh', 'target': 'prerurair'},
+    'rural air heat pump_2': {'label': 'rural air heat pump ambient',
+                                        'source': 'TWh', 'target': 'prerurairam'},
     'rural ground heat pump': {'label': 'rural ground heat pump',
-                                        'source': 'TWh', 'target': 'prespaccfta'},
+                                        'source': 'TWh', 'target': 'prerusgr'},
     'rural ground heat pump_2': {'label': 'rural ground heat pump', 'source': 'TWh',
                                           'target': 'prespaccftaa'},
     'urban decentral air heat pump': {'label': 'urban decentral air heat pump',
@@ -515,7 +517,7 @@ entry_label_mapping = {
     'EV charger_2': {'label': 'BEV charging losses', 'source': 'TWh', 'target': 'prebevloss'},
     'V2G': {'label': 'vehicle to grid', 'source': 'TWh', 'target': 'prevtg'},
     'V2G_2': {'label': 'vehicle to grid losses', 'source': 'TWh', 'target': 'prevtgloss'},
-    'ammonia': {'label': 'hydrogen to ammonia', 'source': 'TWh', 'target': 'prohydclamm'},
+    'ammonia': {'label': 'hydrogen to ammonia', 'source': 'TWh', 'target': 'prohydem'},
     'urban central air heat pump': {'label': 'Heat energy output from centralised heat pumps', 'source': 'TWh',
                                     'target': 'prbrchpac'},
     'urban central air heat pump_2': {'label': 'Heat energy output from centralised heat pumps', 'source': 'TWh',

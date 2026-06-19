@@ -1469,8 +1469,8 @@ def add_ammonia(
         / costs.at["Haber-Bosch", "electricity-input"],
         lifetime=costs.at["Haber-Bosch", "lifetime"],
     )
-    
-    n.add(
+    if investment_year >= 2035:
+     n.add(
         "Link",
         nodes,
         suffix=" ammonia cracker",
