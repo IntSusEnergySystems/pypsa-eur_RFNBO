@@ -1469,7 +1469,7 @@ def add_ammonia(
         / costs.at["Haber-Bosch", "electricity-input"],
         lifetime=costs.at["Haber-Bosch", "lifetime"],
     )
-
+    
     n.add(
         "Link",
         nodes,
@@ -1834,143 +1834,6 @@ def add_h2_gas_infrastructure(
         p_min_pu=options["min_part_load_electrolysis"],
         lifetime=costs.at["electrolysis", "lifetime"],
     )
-    #new implementation for direct VRE connected electrolysers, considering an isolated VRE bus,
-    #on which solar, wind generators are coonected with an option of battery storage. The electrolyser
-    #can only fed by these generators connected to the bus.
-    if constraints["activate_direct_vre_connected_electrolysers"]:
-        vre_techs = ["solar", "onwind", "offwind-ac", "offwind-dc"]
-        vre_gens = n.generators[n.generators.carrier.isin(vre_techs)]
-        active_nodes = vre_gens.bus.unique().tolist()
-        vre_buses = [f"{node} VRE" for node in active_nodes]
-        n.add("Bus", vre_buses,location=nodes, carrier="VRE", unit="MWh_el")
-        node_to_vre_bus = dict(zip(active_nodes, vre_buses))
-        for tech in vre_techs:
-                tech_gens = n.generators[n.generators.carrier == tech]
-                if tech_gens.empty:
-                    continue
-                    
-                tech_nodes = tech_gens.bus.tolist()
-                vre_names = [f"{node} 0 {tech} vre" for node in tech_nodes]
-                
-                #copy the Atlite weather profiles
-                p_max_pu_new = n.generators_t.p_max_pu[tech_gens.index].copy()
-                p_max_pu_new.columns = vre_names
-                target_buses = [node_to_vre_bus[node] for node in tech_nodes]
-                matched_gens = n.generators[n.generators.carrier.str.contains(tech)]
-                tech_costs = tech_gens["capital_cost"].values
-                tech_lifetime = matched_gens["lifetime"].iloc[0]
-                n.add(
-                    "Generator",
-                    vre_names,
-                    bus=target_buses,
-                    carrier=tech + " vre",
-                    p_nom_extendable=True,
-                    capital_cost=tech_costs,
-                    p_max_pu=p_max_pu_new,
-                    lifetime=tech_lifetime
-                )
-        link_names = [f"{node} VRE H2 Electrolysis" for node in active_nodes]
-        bus0_buses = [f"{node} VRE" for node in active_nodes]
-        bus1_buses = [f"{node} H2" for node in active_nodes]
-        matched_links = n.links[n.links.carrier == "H2 Electrolysis"]
-        electrolyser_cost = matched_links["capital_cost"].iloc[0]
-        n.add(
-            "Link",
-            link_names,
-            bus0=bus0_buses,
-            bus1=bus1_buses,
-            p_nom_extendable=True,
-            carrier="vre H2 Electrolysis",
-            efficiency=costs.at["electrolysis", "efficiency"],
-            capital_cost=electrolyser_cost,
-            p_min_pu=options["min_part_load_electrolysis"],
-            lifetime=costs.at["electrolysis", "lifetime"],
-        )
-
-        battery_buses = [f"{node} vre battery" for node in active_nodes]
-        n.add("Bus", battery_buses,location=nodes, carrier="vre battery")
-
-        n.add(
-              "Store",
-              [f"{node} vre battery" for node in active_nodes],
-              bus=battery_buses,
-              e_cyclic=True,
-              e_nom_extendable=True,
-              carrier="vre battery",
-              capital_cost=costs.at["battery storage", "capital_cost"],
-              lifetime=costs.at["battery storage", "lifetime"],
-            )
-
-
-        inv_efficiency = costs.at["battery inverter", "efficiency"] ** 0.5
-        n.add(
-              "Link",
-              [f"{node} vre battery charger" for node in active_nodes],
-              bus0=vre_buses,
-              bus1=battery_buses,
-              carrier="vre battery charger",
-              efficiency=inv_efficiency,
-              capital_cost=costs.at["battery inverter", "capital_cost"],
-              p_nom_extendable=True,
-              lifetime=costs.at["battery inverter", "lifetime"],
-            )
-
-        n.add(
-              "Link",
-              [f"{node} vre battery discharger" for node in active_nodes],
-              bus0=battery_buses,
-              bus1=vre_buses,
-              carrier="vre battery discharger",
-              efficiency=inv_efficiency,
-              marginal_cost=costs.at["battery storage", "marginal_cost"],
-              capital_cost=0, 
-              p_nom_extendable=True,
-              lifetime=costs.at["battery inverter", "lifetime"],
-            )
-        
-        # #Adding an equivalent of RFNBO direct connection variant. The variant is modelled as a 
-        # #hydrogen producing generators each for solar, onwind and offwind technologies. The capital cost
-        # #is combination of VRE technology + electrolyser. The hydrogen production is linked to
-        # #VRE generation profiles computed by Atlite while the optimised nominal capacity also considers 
-        # # the efficiency of electrolyser.
-        # vre_techs = ["solar", "onwind", "offwind-ac", "offwind-dc"]
-        # oversize_factor = config["solving"]["constraints"]["oversize_factor"]
-        # for tech in vre_techs:
-        #   h2_carrier = tech + " Electrolyser"
-        #   tech_oversize = oversize_factor[tech]
-        #   eff_electrolyser = costs.at["electrolysis", "efficiency"]
-        #   #making the VRE copied for atlite already generated
-        #   tech_cols = [c for c in n.generators_t.p_max_pu.columns if tech in c]
-        #   mapping = {}
-        #   for c in sorted(tech_cols):
-        #             node_id = c.split(" " + tech)[0]
-        #             mapping[node_id] = c
-          
-        #   selected_cols = list(mapping.values())
-        #   p_max_pu_new = n.generators_t.p_max_pu[selected_cols].copy()
-        #   p_max_pu_new.columns = [nodes + " " + tech + " H2 Plant" for nodes in mapping.keys()]
-        #   #Adding profiles which are existing for each node
-        #   active_nodes = list(mapping.keys())
-        #   #consider VRE tech + electrolyser cost. Also for dc and ac offshore include connection costs
-        #   electrolyser_cost = costs.loc["electrolysis", "capital_cost"]
-        #   costs_list = []
-        #   for node in active_nodes:
-        #       node_vre_cost = n.generators.at[mapping[node], "capital_cost"]
-        #       #capital cost divide by efficiency of electrolusers for proper sizing
-        #       costs_list.append((node_vre_cost * tech_oversize) + electrolyser_cost)
-        #   n.add(
-        #         "Generator",
-        #          [nodes + " " + tech + " H2 Plant" for nodes in active_nodes],
-        #          bus=[(nodes + " H2").replace(" 0 0", " 0") for nodes in active_nodes],
-        #          carrier=h2_carrier,
-        #          p_nom_extendable=True,
-        #          capital_cost=costs_list,
-        #          efficiency=eff_electrolyser,
-        #          #link production to the VRE weather profile
-        #          p_max_pu=p_max_pu_new,
-        #          #part-load restriction if applicable
-        #          p_min_pu=options["min_part_load_electrolysis"],
-        #          lifetime=costs.at["electrolysis", "lifetime"],)
 
     if options["hydrogen_fuel_cell"]:
         logger.info("Adding hydrogen fuel cell for re-electrification.")
@@ -6360,6 +6223,7 @@ def add_import_options(
             )
 
     if "H2" in import_options:
+     if investment_year > 2025:
         p_nom = gas_input_nodes["pipeline"].dropna()
         p_nom.rename(lambda x: x + " H2", inplace=True)
 
@@ -6373,29 +6237,130 @@ def add_import_options(
             marginal_cost=import_options["H2"],
         )
 
-def update_vre_costs(n: pypsa.Network,):
+
+def add_direct_connected_electrolysers(n: pypsa.Network) -> None:
     '''
-    This function updates capital costs of direct connected vre technologies to the costs of
-    these technologies already used in the model which include updates like connection costs
-    and landfill costs.
+    Adding an equivalent of RFNBO direct connection variant. The variant is modelled as a 
+    hydrogen producing generators each for solar, onwind and offwind technologies. The capital cost
+    is combination of VRE technology + electrolyser. The hydrogen production is linked to
+    VRE generation profiles computed by Atlite while the optimised nominal capacity also considers 
+    the efficiency of electrolyser as compared to links the capacity here will be MWH2 while the costs 
+    are considered as MWel. A hybrid generator which is solar + wind, includes the combination of 
+    both solar and wind availability factors and also capital costs is combination of solar, onwind and
+    electrolysers.
+
     '''
-    techs = ["solar", "onwind", "offwind-ac", "offwind-dc"]
-    for tech in techs:
-        cost_map = (
-            n.generators[n.generators.carrier == tech]
-            .set_index("bus")["capital_cost"]
+    vre_techs = ["solar", "onwind", "offwind-ac", "offwind-dc"]
+    oversize_factor = config["solving"]["constraints"]["oversize_factor"]
+    eff_electrolyser = costs.at["electrolysis", "efficiency"]
+    electrolyser_cost = costs.loc["electrolysis", "capital_cost"]
+
+    tech_mappings = {}
+
+    #individual VRE tech direct connected electrolysers 
+    for tech in vre_techs:
+        h2_carrier = tech + " Electrolysis"
+        tech_oversize = oversize_factor[tech]
+
+        exact_generators = n.generators[n.generators.carrier == tech].index
+        tech_cols = [
+            c for c in exact_generators if c in n.generators_t.p_max_pu.columns
+        ]
+
+        mapping = {}
+        for c in sorted(tech_cols):
+            node_id = c.split(" " + tech)[0]
+            mapping[node_id] = c
+
+        tech_mappings[tech] = mapping
+
+        selected_cols = list(mapping.values())
+        if not selected_cols:
+            continue
+
+        p_max_pu_new = n.generators_t.p_max_pu[selected_cols].copy()
+        p_max_pu_new = np.minimum(1.0, p_max_pu_new * tech_oversize)
+        p_max_pu_new.columns = [
+            nodes + " " + tech + " H2 Plant" for nodes in mapping.keys()
+        ]
+
+        active_nodes = list(mapping.keys())
+        costs_list = []
+        bus_list = []
+
+        for node in active_nodes:
+            node_vre_cost = n.generators.at[mapping[node], "capital_cost"]
+            costs_list.append(
+                (node_vre_cost * tech_oversize)
+                + (electrolyser_cost / eff_electrolyser)
+            )
+            base_region = " ".join(node.split()[:2])
+            target_bus = f"{base_region} H2"
+            bus_list.append(target_bus)
+
+        n.add(
+            "Generator",
+            [nodes + " " + tech + " H2 Plant" for nodes in active_nodes],
+            bus=bus_list,
+            carrier=h2_carrier,
+            p_nom_extendable=True,
+            capital_cost=costs_list,
+            efficiency=eff_electrolyser,
+            p_max_pu=p_max_pu_new,
+            lifetime=costs.at["electrolysis", "lifetime"],
         )
 
-        vre_mask = n.generators.carrier == f"{tech} vre"
-        original_buses = (
-            n.generators.loc[vre_mask, "bus"]
-            .str.replace(" VRE", "", regex=False)
-        )
+    #hybrid configuration, skipping oversize factor
+    solar_map = tech_mappings.get("solar", {})
+    onwind_map = tech_mappings.get("onwind", {})
+    hybrid_nodes = sorted(list(set(solar_map.keys()) & set(onwind_map.keys())))
 
-        n.generators.loc[vre_mask, "capital_cost"] = (
-            original_buses.map(cost_map)
-        )
+    if hybrid_nodes:
+        hybrid_p_max_pu = pd.DataFrame(index=n.snapshots)
+        hybrid_costs = []
+        hybrid_buses = []
+        hybrid_names = []
 
+        for node in hybrid_nodes:
+            solar_col = solar_map[node]
+            onwind_col = onwind_map[node]
+
+            #availability factor combines both solar and onwind
+            combined_profile = (
+                n.generators_t.p_max_pu[solar_col]
+            ) + (n.generators_t.p_max_pu[onwind_col])
+
+            plant_name = f"{node} solar-onwind hybrid H2 Plant"
+            hybrid_names.append(plant_name)
+
+            hybrid_p_max_pu[plant_name] = np.minimum(1.0, combined_profile)
+
+            #combine costs, Solar cost + Onwind cost + Electrolyzer cost
+            solar_cost = n.generators.at[solar_col, "capital_cost"]
+            onwind_cost = n.generators.at[onwind_col, "capital_cost"]
+
+            total_hybrid_cost = (
+                (solar_cost)
+                + (onwind_cost)
+                + (electrolyser_cost / eff_electrolyser)
+            )
+            hybrid_costs.append(total_hybrid_cost)
+
+            base_region = " ".join(node.split()[:2])
+            hybrid_buses.append(f"{base_region} H2")
+
+        n.add(
+            "Generator",
+            hybrid_names,
+            bus=hybrid_buses,
+            carrier="solar-onwind Electrolysis",
+            p_nom_extendable=True,
+            capital_cost=hybrid_costs,
+            efficiency=eff_electrolyser,
+            p_max_pu=hybrid_p_max_pu,
+            lifetime=costs.at["electrolysis", "lifetime"],
+        )
+        
 if __name__ == "__main__":
     if "snakemake" not in globals():
         from scripts._helpers import mock_snakemake
@@ -6762,8 +6727,8 @@ if __name__ == "__main__":
     maybe_adjust_costs_and_potentials(
         n, snakemake.params["adjustments"], investment_year
     )
-    if config["run"]["name"] != "baseline_without_H2":
-      update_vre_costs(n)
+    if constraints["activate_direct_vre_connected_electrolysers"]:
+      add_direct_connected_electrolysers(n)
 
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
 

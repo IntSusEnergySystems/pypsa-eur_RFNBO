@@ -16,6 +16,7 @@
 (in default configuration ror, hydro dams and PHS are not extendable, for baseline yes as they are connected to grid, in RFNBO scenarios, they are not part of additionality and temporal constraint, so they cannot be used for RFNBOs)
 
 - Is grid renewable share correctly defined? Does it include all renewables? 
+  ( The renewable technologies considered for renewable share include solar, wind, hydro,ror and solid biomass (CHPs). H2 fuell cell and H2 turbine are removed as they can use hydrogen which is not green)
 
 - Which bio-fuels do we allow in config?
     -> specifcally, we don't have any biomass feeding the liquid fuels bus. knowing that aviation bets on it for SAF, we should try to better cover this.
