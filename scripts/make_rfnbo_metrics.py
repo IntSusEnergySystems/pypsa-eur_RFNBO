@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
+
+
 """
 Compute RFNBO policy-resolution metrics across planning horizons.
 
@@ -8,8 +10,6 @@ Aggregates hydrogen balances, electrolyser utilisation, VRE curtailment,
 H2 prices and H2-related CO2 flows into a single CSV with planning horizons
 as columns.
 """
-
-from __future__ import annotations
 
 import logging
 import re

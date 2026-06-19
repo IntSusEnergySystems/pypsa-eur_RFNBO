@@ -2952,8 +2952,45 @@ def extra_functionality(
         module = importlib.import_module(module_name)
         custom_extra_functionality = getattr(module, module_name)
         custom_extra_functionality(n, snapshots, snakemake)  # pylint: disable=E0601
-    
-    
+
+
+def _validate_solver_outcome(
+    n: pypsa.Network,
+    status: str,
+    condition: str,
+    solver_log_path: str | None,
+) -> None:
+    """Fail fast on pathological solver outcomes before exporting a bad network."""
+    condition_l = (condition or "").lower()
+    if status != "ok" and any(
+        token in condition_l for token in ("infeasible", "unbounded", "time limit")
+    ):
+        raise RuntimeError(
+            f"Solver failed: status={status!r}, condition={condition!r}. "
+            "Check the constraint stack and national CO2 budget/price calibration."
+        )
+
+    if solver_log_path:
+        try:
+            with open(solver_log_path, encoding="utf-8", errors="replace") as fh:
+                log_text = fh.read()
+            if "Model is infeasible" in log_text and status == "ok":
+                raise RuntimeError(
+                    "Gurobi log reports 'Model is infeasible' but linopy returned "
+                    f"status={status!r}; refusing to export a spurious solution."
+                )
+        except FileNotFoundError:
+            pass
+
+    obj = getattr(n, "objective", None)
+    if obj is not None and obj < -1e12:
+        raise RuntimeError(
+            f"Objective {obj:.3e} is pathologically negative (likely unbounded "
+            "cross-country CO2 arbitrage or inconsistent CO2 prices); "
+            "solution discarded."
+        )
+
+
 def check_objective_value(n: pypsa.Network, solving: dict) -> None:
     """
     Check if objective value matches expected value within tolerance.
@@ -3274,6 +3311,7 @@ if __name__ == "__main__":
             logger.warning(
                 f"Solving status '{status}' with termination condition '{condition}'"
             )
+        _validate_solver_outcome(n, status, condition, snakemake.log.solver)
         check_objective_value(n, snakemake.params.solving)
 
     if "warning" in condition:
