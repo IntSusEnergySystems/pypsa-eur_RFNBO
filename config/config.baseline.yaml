@@ -1060,9 +1060,9 @@ sector:
   co2_sequestration_potential:
     2020: 0
     2025: 0
-    2030: 40
-    2035: 100
-    2040: 180
+    2030: 100
+    2035: 150
+    2040: 200
     2045: 250
     2050: 250
   co2_sequestration_cost: 30
@@ -1166,15 +1166,11 @@ sector:
     max_amount: 1390
     upstream_emissions_factor: 0.1
   imports:
-    enable: false
-    limit: .inf
-    limit_sense: "<="
+    enable: true
+    limit: 133    #https://energy.ec.europa.eu/topics/eus-energy-system/hydrogen_en
+    limit_sense: "<=" #10 million tonnes (Mt) of renewable hydrogen imports by 2030. Based on the lower heating value of hydrogen of roughly 33.33 kWh/kg, this equates to an energy volume of approximately 333 TWh. Here considering 4Mtons as suggested by EDF.
     price:
-      H2: 74
-      NH3: 97
-      methanol: 121
-      gas: 122
-      oil: 125
+      H2: 250 #https://www.ewi.uni-koeln.de/en/news/hydrogen-production-in-the-eu-is-cheaper-than-imports-by-ship/
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
 industry:
@@ -1392,10 +1388,10 @@ solving:
     carbon_intensity: 18  #gco2/MJ
     activate_direct_vre_connected_electrolysers: false
     oversize_factor:
-      solar: 2
-      onwind: 2
-      offwind-ac: 2
-      offwind-dc: 2
+      solar: 1.2
+      onwind: 1.1
+      offwind-ac: 1.1
+      offwind-dc: 1.1
     interconnected_additionality: false
     global_additionality: false
     temporal_correlation: false
@@ -1447,7 +1443,7 @@ solving:
       dual_feasibility_tolerance: 1.0e-05
       random_seed: 123
     "gurobi-default":
-      threads: 4
+      threads: 8
       method: 2
       crossover: 0
       BarConvTol: 1.0e-05
