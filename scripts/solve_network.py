@@ -2711,12 +2711,11 @@ def add_max_growth_constraint(n: pypsa.Network) -> None:
                 ext_gens.carrier == f"{carrier} Electrolysis"
             ].index
             if not direct_gen_idx.empty:
-                factor = oversize_factor.get(carrier, 1.0)
+                factors = n.generators.loc[direct_gen_idx, "oversize_factor"]
                 #convert MW_h2 output back to physical VRE capacity built
                 direct_term = (
-                    n.model["Generator-p_nom"].loc[direct_gen_idx].sum()
-                    * factor
-                )
+                    n.model["Generator-p_nom"].loc[direct_gen_idx] * factors).sum()
+                
                 lhs_terms.append(direct_term)
                 num_gens += len(direct_gen_idx)
             #hybrid plants basedon solar + onwind
@@ -2725,9 +2724,10 @@ def add_max_growth_constraint(n: pypsa.Network) -> None:
                 ext_gens.carrier == "solar-onwind Electrolysis"
             ].index
             if not hybrid_gen_idx.empty and carrier in ["solar", "onwind"]:
+                hybrid_factors = n.generators.loc[hybrid_gen_idx, "oversize_factor"]
                 hybrid_term = (
-                    n.model["Generator-p_nom"].loc[hybrid_gen_idx].sum()
-                )
+                    n.model["Generator-p_nom"].loc[hybrid_gen_idx] * hybrid_factors).sum()
+                
                 lhs_terms.append(hybrid_term)
                 num_gens += len(hybrid_gen_idx)
         if not lhs_terms:
@@ -2736,9 +2736,7 @@ def add_max_growth_constraint(n: pypsa.Network) -> None:
                 carrier,
             )
             continue
-
         lhs = sum(lhs_terms) if len(lhs_terms) > 1 else lhs_terms[0]
-        
         n.model.add_constraints(lhs <= cap_mw, name=f"max_growth-{carrier}")
 
         logger.info(

@@ -45,7 +45,7 @@ from scripts.build_transport_demand import transport_degree_factor
 from scripts.definitions.heat_sector import HeatSector
 from scripts.definitions.heat_system import HeatSystem
 from scripts.prepare_network import maybe_adjust_costs_and_potentials
-
+from scipy.optimize import minimize_scalar  
 spatial = SimpleNamespace()
 logger = logging.getLogger(__name__)
 
@@ -6237,128 +6237,399 @@ def add_import_options(
         )
 
 
-def add_direct_connected_electrolysers(n: pypsa.Network) -> None:
-    '''
-    Adding an equivalent of RFNBO direct connection variant. The variant is modelled as a 
+def generate_node_html_reports(
+    n: pypsa.Network,
+    cost_breakdown_df: pd.DataFrame,
+    before_ts: pd.DataFrame,
+    after_ts: pd.DataFrame,
+    lcoh_curves: dict,
+) -> None:
+    
+    """Generates html files for each node for parameters of direct connected electrolysers.
+    """
+    output_dir = f"resources/{study}/Direct Connected Electrolysers"
+    os.makedirs(output_dir, exist_ok=True)
+    unique_nodes = cost_breakdown_df["Node"].unique()
+
+    for node in unique_nodes:
+        node_clean = "_".join(str(node).split()[:2])
+        node_costs = cost_breakdown_df[cost_breakdown_df["Node"] == node]
+
+        #capital costs bar chart
+        svg_bars = ""
+        table_rows = ""
+        max_cost = max(node_costs["Total Capital Cost"].max(), 1.0)
+
+        for idx, row in enumerate(node_costs.to_dict("records")):
+            x_pos = 120 + (idx * 140)
+            vre_h = (row["VRE Component Cost"] / max_cost) * 160
+            elec_h = (row["Electrolyser Component Cost"] / max_cost) * 160
+            y_vre = 200 - vre_h
+            y_elec = y_vre - elec_h
+
+            tech_type_de = row['Type'].upper()
+            if "ONWIND" in tech_type_de: tech_type_de = "WIND ONSHORE"
+            elif "OFFWIND-AC" in tech_type_de: tech_type_de = "WIND OFFSHORE-AC"
+            elif "OFFWIND-DC" in tech_type_de: tech_type_de = "WIND OFFSHORE-DC"
+
+            svg_bars += f"""
+            <rect x="{x_pos}" y="{y_vre}" width="55" height="{vre_h}" fill="#f1c40f" />
+            <rect x="{x_pos}" y="{y_elec}" width="55" height="{elec_h}" fill="#2ecc71" />
+            <text x="{x_pos + 27}" y="220" font-size="11" text-anchor="middle" fill="#555">{tech_type_de}</text>
+            """
+            table_rows += f"""
+            <tr>
+                <td><strong>{row['Generator Name']}</strong></td>
+                <td>{row['VRE Component Cost']:,.2f} €</td>
+                <td>{row['Electrolyser Component Cost']:,.2f} €</td>
+                <td style="color:#2c3e50; font-weight:bold;">{row['Total Capital Cost']:,.2f} €</td>
+            </tr>
+            """
+
+        #availability factors plot
+        num_points = min(len(n.snapshots), 50)
+        indices = np.linspace(0, len(n.snapshots) - 1, num_points, dtype=int)
+        sampled_snapshots = n.snapshots[indices]
+
+        node_cols_before = [c for c in before_ts.columns if f"{node} " in c or f"{node}_" in c]
+        tech_figures_html = ""
+        colors = ["#e74c3c", "#3498db", "#9b59b6", "#e67e22"]
+
+        for c_idx, col_b in enumerate(node_cols_before):
+            col_a = col_b.replace("Before Oversize", "After Oversize")
+            if col_a not in after_ts.columns: continue
+
+            color = colors[c_idx % len(colors)]
+            gen_name = col_b.split(' (')[0]
+            clean_label = gen_name.replace(f"{node} ", "")
+
+            meta_row = node_costs[node_costs["Generator Name"] == gen_name].iloc[0]
+            opt_f = meta_row["Oversize Factor"]
+
+            pts_b, pts_a = [], []
+            y_max_val = max(before_ts[col_b].max(), 1.0)
+            
+            y_coordinate_for_1 = 210 - ((1.0 / y_max_val) * 150)
+
+            for step_idx, snap in enumerate(sampled_snapshots):
+                x = 60 + (step_idx * (280 / max(1, num_points - 1)))
+                y_b = 210 - ((before_ts.at[snap, col_b] / y_max_val) * 150)
+                y_a = 210 - ((after_ts.at[snap, col_a] / y_max_val) * 150)
+                pts_b.append(f"{x},{y_b}")
+                pts_a.append(f"{x},{y_a}")
+
+            svg_lcoh_line = ""
+            opt_marker_x, opt_marker_y = 60, 210
+            if node in lcoh_curves and gen_name in lcoh_curves[node]:
+                curve = lcoh_curves[node][gen_name]
+                factors = curve["factors"]
+                lcohs = curve["lcoh"]
+                min_l, max_l = min(lcohs), max(lcohs)
+                l_range = max(max_l - min_l, 1e-5)
+
+                curve_pts = []
+                for f, l in zip(factors, lcohs):
+                    cx = 60 + ((f - 1.0) / 2.0) * 280
+                    cy = 210 - ((l - min_l) / l_range) * 150
+                    curve_pts.append(f"{cx},{cy}")
+
+                svg_lcoh_line = f'<path d="M {" L ".join(curve_pts)}" fill="none" stroke="#7f8c8d" stroke-width="2" decay_step/>'
+                opt_marker_x = 60 + ((opt_f - 1.0) / 2.0) * 280
+                
+                opt_marker_y = 210 - (((meta_row["Total Capital Cost"] / max(1e-3, np.sum(after_ts[col_a].values))) - min_l) / l_range * 150)
+                opt_marker_y = np.clip(opt_marker_y, 60, 210)
+
+            tech_figures_html += f"""
+            <div class="tech-container">
+                <div class="tech-header-row">
+                    <div class="tech-title">{clean_label.upper()}</div>
+                    <div class="badge">Oversize-Factor: <strong>{opt_f:.2f}x</strong></div>
+                </div>
+                
+                <div class="grid-2">
+                    <div class="chart-wrapper">
+                        <div class="chart-subtitle">Availability factor (p_max_pu)</div>
+                        <svg width="380" height="240" viewBox="0 0 380 240" style="background:white;">
+                            <line x1="60" y1="210" x2="360" y2="210" stroke="#ccc" stroke-width="1.5"/>
+                            <line x1="60" y1="60" x2="60" y2="210" stroke="#ccc" stroke-width="1.5"/>
+                            
+                            <line x1="60" y1="{y_coordinate_for_1}" x2="360" y2="{y_coordinate_for_1}" stroke="#e74c3c" stroke-width="1.2" stroke-dasharray="2" opacity="0.7"/>
+                            
+                            <text x="50" y="214" font-size="10" text-anchor="end" fill="#555">0.0</text>
+                            <text x="50" y="{y_coordinate_for_1 + 4}" font-size="10" text-anchor="end" fill="#e74c3c" font-weight="bold">1.0</text>
+                            <text x="50" y="64" font-size="10" text-anchor="end" fill="#555">Max</text>
+                            
+                            <path d="M {' L '.join(pts_b)}" fill="none" stroke="{color}" stroke-width="1.2" stroke-dasharray="4" />
+                            <path d="M {' L '.join(pts_a)}" fill="none" stroke="{color}" stroke-width="2.2" />
+                            
+                            <line x1="90" y1="25" x2="115" y2="25" stroke="{color}" stroke-width="1.2" stroke-dasharray="3" />
+                            <text x="120" y="28" font-size="10" fill="#555">Before Oversize</text>
+                            <line x1="230" y1="25" x2="255" y2="25" stroke="{color}" stroke-width="2.2" />
+                            <text x="260" y="28" font-size="10" fill="#555">After Oversize</text>
+                        </svg>
+                    </div>
+
+                    <div class="chart-wrapper">
+                        <div class="chart-subtitle">LCOH Optimisation</div>
+                        <svg width="380" height="240" viewBox="0 0 380 240" style="background:white;">
+                            <line x1="60" y1="210" x2="360" y2="210" stroke="#ccc" stroke-width="1.5"/>
+                            <line x1="60" y1="60" x2="60" y2="210" stroke="#ccc" stroke-width="1.5"/>
+                            <text x="50" y="214" font-size="10" text-anchor="end" fill="#555">Min</text>
+                            <text x="50" y="64" font-size="10" text-anchor="end" fill="#555">Max</text>
+                            <text x="60" y="225" font-size="10" text-anchor="middle" fill="#555">1.0x</text>
+                            <text x="360" y="225" font-size="10" text-anchor="middle" fill="#555">3.0x</text>
+                            {svg_lcoh_line}
+                            <circle cx="{opt_marker_x}" cy="{opt_marker_y}" r="5" fill="#e74c3c" />
+                            <text x="{opt_marker_x}" y="{opt_marker_y - 10}" font-size="10" font-weight="bold" fill="#e74c3c" text-anchor="middle">Optimum</text>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            """
+
+        html_template = f"""<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Bus - {node}</title>
+            <style>
+                body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 30px; background: #f4f7f6; color: #333; }}
+                .card {{ background: white; max-width: 950px; margin: 0 auto; padding: 35px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }}
+                h1 {{ color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 12px; margin-top: 0; }}
+                h2 {{ color: #34495e; margin-top: 40px; font-size: 1.35em; border-left: 5px solid #2ecc71; padding-left: 12px; }}
+                .summary {{ background: #ebf5fb; padding: 15px 20px; border-radius: 6px; margin: 20px 0; font-size: 0.95em; }}
+                .chart-wrapper {{ background: #fafafa; border: 1px solid #eef2f5; border-radius: 8px; padding: 15px; text-align: center; }}
+                .grid-2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px; }}
+                .tech-container {{ border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 25px; background: #fff; }}
+                .tech-header-row {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 8px; margin-bottom: 15px; }}
+                .tech-title {{ font-size: 14px; font-weight: bold; color: #2c3e50; }}
+                .badge {{ background: #e8f8f5; color: #117a65; padding: 6px 12px; border-radius: 20px; font-size: 13px; border: 1px solid #a3e4d7; }}
+                .chart-subtitle {{ font-size: 11px; font-weight: bold; color: #7f8c8d; text-transform: uppercase; margin-bottom: 10px; text-align: left; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
+                th, td {{ padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }}
+                th {{ background-color: #34495e; color: white; }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>Direct Connected Electrolyser info: <span style="color:#3498db;">{node}</span></h1>
+                <div class="summary"><strong>Bus Region:</strong> {" ".join(str(node).split()[:2])} H2-Bus.</div>
+
+                <h2>1. Annualised Investment Costs (€ / MW<sub>el</sub>)</h2>
+                <div class="chart-wrapper" style="margin-bottom:20px;">
+                    <svg width="750" height="250" style="background:white;">
+                        <line x1="75" y1="200" x2="700" y2="200" stroke="#aaa" stroke-width="1.5"/>
+                        <line x1="75" y1="30" x2="75" y2="200" stroke="#aaa" stroke-width="1.5"/>
+                        
+                        <line x1="70" y1="200" x2="75" y2="200" stroke="#aaa" stroke-width="1.5"/>
+                        <text x="65" y="204" font-size="11" text-anchor="end" fill="#555">0</text>
+                        
+                        <line x1="70" y1="115" x2="75" y2="115" stroke="#aaa" stroke-width="1.2" stroke-dasharray="3"/>
+                        <text x="65" y="119" font-size="11" text-anchor="end" fill="#555">50%</text>
+                        
+                        <line x1="70" y1="30" x2="75" y2="30" stroke="#aaa" stroke-width="1.5"/>
+                        <text x="65" y="34" font-size="11" text-anchor="end" fill="#555">Max</text>
+                        
+                        <text x="25" y="115" font-size="11" font-weight="bold" fill="#7f8c8d" transform="rotate(-90 25 115)" text-anchor="middle">Costs Breakdown</text>
+                        
+                        {svg_bars}
+                        
+                        <rect x="530" y="30" width="12" height="12" fill="#2ecc71" />
+                        <text x="550" y="41" font-size="11" fill="#444">Electrolyser Costs</text>
+                        <rect x="530" y="50" width="12" height="12" fill="#f1c40f" />
+                        <text x="550" y="61" font-size="11" fill="#444">VRE Costs</text>
+                    </svg>
+                </div>
+
+                <table>
+                    <thead><tr><th>Generator</th><th>VRE Tech Costs</th><th>Electrolyser Costs</th><th>Total Investment Costs</th></tr></thead>
+                    <tbody>{table_rows}</tbody>
+                </table>
+
+                <h2>2. Optimised Oversize Factors on LCOH</h2>
+                {tech_figures_html}
+            </div>
+        </body>
+        </html>
+        """
+        with open(f"{output_dir}/info_{node_clean}_{investment_year}.html", "w", encoding="utf-8") as f:
+            f.write(html_template)
+            
+         
+def add_direct_connected_electrolysers(n: pypsa.Network) -> tuple:
+    """ Adding an equivalent of RFNBO direct connection variant. The variant is modelled as a 
     hydrogen producing generators each for solar, onwind and offwind technologies. The capital cost
-    is combination of VRE technology + electrolyser. The hydrogen production is linked to
+    is combination of VRE technology + electrolyser + optmised over-size factors. 
+    The hydrogen production is linked to
     VRE generation profiles computed by Atlite while the optimised nominal capacity also considers 
     the efficiency of electrolyser as compared to links the capacity here will be MWH2 while the costs 
     are considered as MWel. A hybrid generator which is solar + wind, includes the combination of 
     both solar and wind availability factors and also capital costs is combination of solar, onwind and
     electrolysers.
-
-    '''
+    """
     vre_techs = ["solar", "onwind", "offwind-ac", "offwind-dc"]
-    oversize_factor = config["solving"]["constraints"]["oversize_factor"]
     eff_electrolyser = costs.at["electrolysis", "efficiency"]
     electrolyser_cost = costs.loc["electrolysis", "capital_cost"]
+    electrolyser_lifetime = costs.at["electrolysis", "lifetime"]
 
     tech_mappings = {}
+    cost_breakdown_records = []
+    before_ts_dict = {}
+    after_ts_dict = {}
+    lcoh_curves = {}
 
-    #individual VRE tech direct connected electrolysers 
+    #Process Individual Technologies
     for tech in vre_techs:
         h2_carrier = tech + " Electrolysis"
-        tech_oversize = oversize_factor[tech]
-
         exact_generators = n.generators[n.generators.carrier == tech].index
-        tech_cols = [
-            c for c in exact_generators if c in n.generators_t.p_max_pu.columns
-        ]
+        tech_cols = [c for c in exact_generators if c in n.generators_t.p_max_pu.columns]
 
-        mapping = {}
-        for c in sorted(tech_cols):
-            node_id = c.split(" " + tech)[0]
-            mapping[node_id] = c
-
+        mapping = {c.split(" " + tech)[0]: c for c in sorted(tech_cols)}
         tech_mappings[tech] = mapping
 
-        selected_cols = list(mapping.values())
-        if not selected_cols:
+        active_nodes = list(mapping.keys())
+        if not active_nodes:
             continue
 
-        p_max_pu_new = n.generators_t.p_max_pu[selected_cols].copy()
-        p_max_pu_new = np.minimum(1.0, p_max_pu_new * tech_oversize)
-        p_max_pu_new.columns = [
-            nodes + " " + tech + " H2 Plant" for nodes in mapping.keys()
-        ]
-
-        active_nodes = list(mapping.keys())
         costs_list = []
         bus_list = []
-
+        oversize_list = []
         for node in active_nodes:
-            node_vre_cost = n.generators.at[mapping[node], "capital_cost"]
-            costs_list.append(
-                (node_vre_cost * tech_oversize)
-                + (electrolyser_cost / eff_electrolyser)
-            )
+            gen_name = f"{node} {tech} H2 Plant"
+            orig_col = mapping[node]
+            orig_profile = n.generators_t.p_max_pu[orig_col].values
+            node_vre_cost = n.generators.at[orig_col, "capital_cost"]
+            scaled_elec_cost = electrolyser_cost / eff_electrolyser
+
+            def objective_function(f):
+                yield_profile = np.minimum(1.0, orig_profile * f)
+                total_yield = np.sum(yield_profile)
+                if total_yield == 0: return np.inf
+                return ((node_vre_cost * f) + scaled_elec_cost) / total_yield
+
+            #optimisation
+            res = minimize_scalar(objective_function, bounds=(1.0, 3.0), method='bounded')
+            opt_oversize = float(res.x) if res.success else 1.0
+            oversize_list.append(opt_oversize)
+            #generate evaluation curve for the visual plot
+            test_factors = np.linspace(1.0, 3.0, 20)
+            test_lcohs = [objective_function(f) for f in test_factors]
+            
+            if node not in lcoh_curves: lcoh_curves[node] = {}
+            lcoh_curves[node][gen_name] = {"factors": test_factors, "lcoh": test_lcohs}
+
+            scaled_profile = np.minimum(1.0, orig_profile * opt_oversize)
+            before_ts_dict[f"{gen_name} (Before Oversize)"] = n.generators_t.p_max_pu[orig_col]
+            after_ts_dict[f"{gen_name} (After Oversize)"] = pd.Series(scaled_profile, index=n.snapshots)
+
+            scaled_vre_cost = node_vre_cost * opt_oversize
+            total_cost = scaled_vre_cost + scaled_elec_cost
+
+            costs_list.append(total_cost)
+            cost_breakdown_records.append({
+                "Generator Name": gen_name, "Node": node, "Type": tech,
+                "VRE Component Cost": scaled_vre_cost, "Electrolyser Component Cost": scaled_elec_cost,
+                "Total Capital Cost": total_cost, "Oversize Factor": opt_oversize
+            })
+
             base_region = " ".join(node.split()[:2])
-            target_bus = f"{base_region} H2"
-            bus_list.append(target_bus)
+            bus_list.append(f"{base_region} H2")
 
-        n.add(
-            "Generator",
-            [nodes + " " + tech + " H2 Plant" for nodes in active_nodes],
-            bus=bus_list,
-            carrier=h2_carrier,
-            p_nom_extendable=True,
-            capital_cost=costs_list,
-            efficiency=eff_electrolyser,
-            p_max_pu=p_max_pu_new,
-            lifetime=costs.at["electrolysis", "lifetime"],
+        p_max_pu_new = pd.DataFrame(
+            {f"{node} {tech} H2 Plant": after_ts_dict[f"{node} {tech} H2 Plant (After Oversize)"] for node in active_nodes},
+            index=n.snapshots,
         )
+        n.add(
+            "Generator", 
+            [f"{node} {tech} H2 Plant" for node in active_nodes], 
+            bus=bus_list, 
+            carrier=h2_carrier, 
+            p_nom_extendable=True, 
+            capital_cost=costs_list, 
+            efficiency=eff_electrolyser, 
+            p_max_pu=p_max_pu_new, 
+            lifetime=electrolyser_lifetime,
+            oversize_factor=oversize_list)
 
-    #hybrid configuration, skipping oversize factor
+    #hybrid variant
     solar_map = tech_mappings.get("solar", {})
     onwind_map = tech_mappings.get("onwind", {})
     hybrid_nodes = sorted(list(set(solar_map.keys()) & set(onwind_map.keys())))
 
     if hybrid_nodes:
-        hybrid_p_max_pu = pd.DataFrame(index=n.snapshots)
+        hybrid_p_max_pu_dict = {}
         hybrid_costs = []
         hybrid_buses = []
         hybrid_names = []
-
+        hybrid_oversize_list = []
         for node in hybrid_nodes:
             solar_col = solar_map[node]
             onwind_col = onwind_map[node]
-
-            #availability factor combines both solar and onwind
-            combined_profile = (
-                n.generators_t.p_max_pu[solar_col]
-            ) + (n.generators_t.p_max_pu[onwind_col])
-
             plant_name = f"{node} solar-onwind hybrid H2 Plant"
             hybrid_names.append(plant_name)
 
-            hybrid_p_max_pu[plant_name] = np.minimum(1.0, combined_profile)
-
-            #combine costs, Solar cost + Onwind cost + Electrolyzer cost
+            solar_profile = n.generators_t.p_max_pu[solar_col].values
+            onwind_profile = n.generators_t.p_max_pu[onwind_col].values
             solar_cost = n.generators.at[solar_col, "capital_cost"]
             onwind_cost = n.generators.at[onwind_col, "capital_cost"]
+            scaled_elec_cost = electrolyser_cost / eff_electrolyser
 
-            total_hybrid_cost = (
-                (solar_cost)
-                + (onwind_cost)
-                + (electrolyser_cost / eff_electrolyser)
-            )
+            def hybrid_objective(f):
+                combined = (solar_profile + onwind_profile) * f
+                yield_profile = np.minimum(1.0, combined)
+                total_yield = np.sum(yield_profile)
+                if total_yield == 0: return np.inf
+                return (((solar_cost + onwind_cost) * f) + scaled_elec_cost) / total_yield
+
+            res = minimize_scalar(hybrid_objective, bounds=(1.0, 3.0), method='bounded')
+            opt_hybrid_oversize = float(res.x) if res.success else 1.0
+            hybrid_oversize_list.append(opt_hybrid_oversize)
+            
+            test_factors = np.linspace(1.0, 3.0, 20)
+            test_lcohs = [hybrid_objective(f) for f in test_factors]
+            if node not in lcoh_curves: lcoh_curves[node] = {}
+            lcoh_curves[node][plant_name] = {"factors": test_factors, "lcoh": test_lcohs}
+
+            combined_profile_series = n.generators_t.p_max_pu[solar_col] + n.generators_t.p_max_pu[onwind_col]
+            final_hybrid_profile = np.minimum(1.0, combined_profile_series * opt_hybrid_oversize)
+
+            before_ts_dict[f"{plant_name} (Before Oversize)"] = combined_profile_series
+            after_ts_dict[f"{plant_name} (After Oversize)"] = final_hybrid_profile
+            hybrid_p_max_pu_dict[plant_name] = final_hybrid_profile
+
+            scaled_vre_cost = (solar_cost + onwind_cost) * opt_hybrid_oversize
+            total_hybrid_cost = scaled_vre_cost + scaled_elec_cost
+
             hybrid_costs.append(total_hybrid_cost)
-
+            cost_breakdown_records.append({
+                "Generator Name": plant_name, "Node": node, "Type": "hybrid",
+                "VRE Component Cost": scaled_vre_cost, "Electrolyser Component Cost": scaled_elec_cost,
+                "Total Capital Cost": total_hybrid_cost, "Oversize Factor": opt_hybrid_oversize
+            })
             base_region = " ".join(node.split()[:2])
             hybrid_buses.append(f"{base_region} H2")
 
+        hybrid_p_max_pu = pd.DataFrame(hybrid_p_max_pu_dict, index=n.snapshots)
         n.add(
             "Generator",
-            hybrid_names,
-            bus=hybrid_buses,
-            carrier="solar-onwind Electrolysis",
-            p_nom_extendable=True,
-            capital_cost=hybrid_costs,
-            efficiency=eff_electrolyser,
-            p_max_pu=hybrid_p_max_pu,
-            lifetime=costs.at["electrolysis", "lifetime"],
-        )
+             hybrid_names, 
+             bus=hybrid_buses,
+             carrier="solar-onwind Electrolysis", 
+             p_nom_extendable=True, 
+             capital_cost=hybrid_costs, 
+             efficiency=eff_electrolyser, 
+             p_max_pu=hybrid_p_max_pu, 
+             lifetime=electrolyser_lifetime,
+             oversize_factor=hybrid_oversize_list)
+
+    df_costs = pd.DataFrame(cost_breakdown_records)
+    before_oversize_ts = pd.DataFrame(before_ts_dict, index=n.snapshots)
+    after_oversize_ts = pd.DataFrame(after_ts_dict, index=n.snapshots)
+
+    generate_node_html_reports(n, df_costs, before_oversize_ts, after_oversize_ts, lcoh_curves)
+
+    return df_costs, before_oversize_ts, after_oversize_ts
+
         
 if __name__ == "__main__":
     if "snakemake" not in globals():
@@ -6381,7 +6652,7 @@ if __name__ == "__main__":
     ext_carriers = snakemake.params.electricity.get("extendable_carriers", dict())
     constraints = config["solving"].get("constraints", {})
     investment_year = int(snakemake.wildcards.planning_horizons)
-
+    study = config["run"]["name"]
     n = pypsa.Network(snakemake.input.network)
 
     pop_layout = pd.read_csv(snakemake.input.clustered_pop_layout, index_col=0)
