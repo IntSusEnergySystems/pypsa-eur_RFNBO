@@ -173,7 +173,7 @@ def prepare_sepia(countries, flows_only=False):
     fec_carrier_pe = flows.loc[:, selected_columns_pe]
     grouped_fec_pe = fec_carrier_pe.groupby(level='Source', axis=1).sum()
     fec_pe = grouped_fec_pe
-    for en_code in ['enc','cms']:
+    for en_code in ['pac','enc','cms']:
         flows[(en_code+'_pe',en_code+'_fe','')] = fec_pe[en_code+'_fe']
   
     biogas_p = flows['bgl_pe','gaz_se',''].squeeze().rename_axis(None).clip(lower=0)

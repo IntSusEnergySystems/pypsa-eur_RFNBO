@@ -428,7 +428,7 @@ entry_label_mapping = {
     'methanolisation_4': {'label': 'electricity to methanol', 'source': 'TWh', 'target': 'pretareen'},
     'methanolisation_2': {'label': 'waste heat methanolisation', 'source': 'TWh', 'target': 'prehdvap'},
     'Haber-Bosch_3': {'label': 'Production losses of ammonia', 'source': 'TWh', 'target': 'prohydnh'},
-    'Haber-Bosch_2': {'label': 'haberbosch waste heat', 'source': 'TWh', 'target': 'prohydvap'},
+    'Haber-Bosch_2': {'label': 'hb waste heat', 'source': 'TWh', 'target': 'hbloss'},
     'Haber-Bosch_4': {'label': 'Production of ammonia from H2', 'source': 'TWh', 'target': 'proamclammt'},
     'urban decentral biomass boiler_2': {'label': 'Transformation losses (solid biomass boilers)',
                                                       'source': 'TWh', 'target': 'lossbbb'},
@@ -513,8 +513,8 @@ entry_label_mapping = {
     'agriculture machinery oil_2': {'label': 'agriculture oil to demand', 'source': 'TWh', 'target': 'prespetcfagrr'},
     'agriculture electricity': {'label': 'agriculture electricity', 'source': 'TWh', 'target': 'preselccfagr'},
     'agriculture heat': {'label': 'agriculture heat', 'source': 'TWh', 'target': 'presvapcfagr'},
-    'EV charger': {'label': 'BEV charging', 'source': 'TWh', 'target': 'prebev'},
-    'EV charger_2': {'label': 'BEV charging losses', 'source': 'TWh', 'target': 'prebevloss'},
+    'EV charger': {'label': 'ev charging', 'source': 'TWh', 'target': 'prebev'},
+    'EV charger_2': {'label': 'ev charging losses', 'source': 'TWh', 'target': 'evloss'},
     'V2G': {'label': 'vehicle to grid', 'source': 'TWh', 'target': 'prevtg'},
     'V2G_2': {'label': 'vehicle to grid losses', 'source': 'TWh', 'target': 'prevtgloss'},
     'ammonia': {'label': 'hydrogen to ammonia', 'source': 'TWh', 'target': 'prohydem'},
@@ -541,9 +541,9 @@ entry_label_mapping = {
     'biomass to liquid_2': {'label': 'biomass to liquid losses', 'source': 'TWh', 'target': 'probmliqlos'},
     'biomass to liquid CC_2': {'label': 'biomass to liquid CC losses', 'source': 'TWh', 'target': 'probmliqloscc'},
     'battery charger': {'label': 'battery charger', 'source': 'TWh', 'target': 'probattchg'},
-    'battery charger_2': {'label': 'battery charger losses', 'source': 'TWh', 'target': 'probattchlos'},
+    'battery charger_2': {'label': 'battery charger losses', 'source': 'TWh', 'target': 'prebatlos'},
     'battery discharger': {'label': 'battery discharger', 'source': 'TWh', 'target': 'probattdhg'},
-    'battery discharger_2': {'label': 'battery discharger losses', 'source': 'TWh', 'target': 'probattdhlos'},
+    'battery discharger_2': {'label': 'battery discharger losses', 'source': 'TWh', 'target': 'prebatdtlos'},
     'H2 turbine': {'label': 'hydrogen turbine', 'source': 'TWh', 'target': 'proelchyd'},
     'H2 turbine_2': {'label': 'hydrogen turbine losses', 'source': 'TWh', 'target': 'fftfy'},
     'Fischer-Tropsch': {'label': 'Fischer-Tropsch', 'source': 'TWh', 'target': 'profischer'},
@@ -1572,6 +1572,18 @@ def prepare_emissions(cluster, opt, sector_opt,planning_horizon, country):
             )
         )
         
+        # co2 vent
+        if country == 'EU':
+            value = -(n.snapshot_weightings.generators @ n.links_t.p1.filter(like="co2 vent")).sum().sum() 
+        else:
+            value = -(n.snapshot_weightings.generators @ n.links_t.p1.filter(like="co2 vent").filter(
+                like=country)).sum().sum() 
+        collection.append(
+            pd.Series(
+                dict(label="co2 vent", source="co2 stored", target="co2 atmosphere",
+                     value=value)
+            )
+        )
         
         cf = pd.concat(collection, axis=1).T
         cf.value /= 1e6  # Mt
@@ -1669,7 +1681,7 @@ def prepare_emissions(cluster, opt, sector_opt,planning_horizon, country):
 
 # %%
 entries_to_select_c = ['process emissions', 'process emissions CC', 'CCGT', 'lignite',
-                       'SMR CC', 'SMR CC_2',
+                       'SMR CC', 'SMR CC_2','co2 vent',
                        'rural gas boiler','oil refining emissions',
                        'urban decentral gas boiler',
                        'urban central gas boiler',
@@ -1701,7 +1713,7 @@ entries_to_select_c = ['process emissions', 'process emissions CC', 'CCGT', 'lig
 entry_label_mapping_c = {
     'process emissions': {'label': 'process emissions', 'source': 'MtCO2', 'target': 'emmprocess'},
     'process emissions CC': {'label': 'process emissions CC', 'source': 'MtCO2', 'target': 'emmprocessccst'},
-    # 'process emissions CC_2': {'label': 'process emissions CC', 'source': 'MtCO2', 'target': 'emmprocessccst'},
+    'co2 vent': {'label': 'co2 vent', 'source': 'MtCO2', 'target': 'emmcovent'},
     'CCGT': {'label': 'CCGT emissions', 'source': 'MtCO2', 'target': 'emmccgt'},
     'OCGT': {'label': 'OCGT emissions', 'source': 'MtCO2', 'target': 'emmocgt'},
     'lignite': {'label': 'lignite emissions', 'source': 'MtCO2', 'target': 'emmlig'},
