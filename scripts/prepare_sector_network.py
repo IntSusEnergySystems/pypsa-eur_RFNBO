@@ -2050,7 +2050,7 @@ def add_h2_gas_infrastructure(
                 )
 
     if options["H2_retrofit"]:
-     if investment_year >= :
+     if investment_year >= 2030:
         logger.info("Add retrofitting options of existing CH4 pipes to H2 pipes.")
 
         fr = "gas pipeline"
@@ -2074,7 +2074,7 @@ def add_h2_gas_infrastructure(
         )
 
     if options["H2_network"]:
-     if investment_year >= :
+     if investment_year >= 2030:
         logger.info("Add options for new hydrogen pipelines.")
 
         h2_pipes = create_network_topology(
@@ -6897,7 +6897,7 @@ if __name__ == "__main__":
         remove_h2_network(n)
     
     if options["co2_network"]:
-     if investment_year >= :
+     if investment_year >= 2030:
         add_co2_network(
             n,
             costs,
@@ -7000,7 +7000,7 @@ if __name__ == "__main__":
         n, snakemake.params["adjustments"], investment_year
     )
     if constraints["activate_direct_vre_connected_electrolysers"]:
-     if investment_year >= :
+     if investment_year >= 2030:
       add_direct_connected_electrolysers(n)
 
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
