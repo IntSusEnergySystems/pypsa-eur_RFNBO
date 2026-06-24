@@ -89,7 +89,7 @@ transmission_limit:
     2045: 1.3
     2050: 1.3
 
-H2_pipeline_limit: 0.2 #considering 20% expansion of max allowed capacities same as trnsmission lines limit
+H2_pipeline_limit: 0.2 # (disabled) considering 20% expansion of max allowed capacities
 co2_budget_national:
   2030:
     AT: 0.45
