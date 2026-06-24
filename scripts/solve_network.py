@@ -643,6 +643,45 @@ def imposed_transmission_limit(n, config):
     n.lines["s_nom_max"] = n.lines["s_nom"] * config["transmission_limit"][planning_horizon]
     condition = ((n.links['carrier'] == 'DC') & (n.links['p_nom'] != 0))
     n.links.loc[condition, "p_nom_max"] = n.links.loc[condition, "p_nom"] * config["transmission_limit"][planning_horizon]
+    #Limit H2 pipelines expansion
+    # h2_links = n.links[(n.links.carrier == "H2 pipeline") & n.links.p_nom_extendable]
+
+    # for idx, link in h2_links.iterrows():
+    #     c0 = link.bus0[:2]
+    #     c1 = link.bus1[:2]
+    #     countries = {c0, c1}
+    #     #Assumptions from EU hydrogen backbone https://ehb.eu/files/downloads/2020_European-Hydrogen-Backbone_Report.pdf
+    #     #Mega-Transit Hubs (13 GW)
+    #     if countries in [{"NL", "DE"}, {"BE", "DE"}, {"DK", "DE"}, {"ES", "FR"}, {"FR", "DE"}, {"NO", "DE"}, {"GB", "NL"}]:
+    #         cap = 13000
+            
+    #     #Internal domestic buses, assuming same 13GW as all are in high transit hubs
+    #     elif c0 == c1:
+    #         cap = 13000
+            
+    #     #Central & Southern Main Transit (7 GW)
+    #     elif countries in [{"AT", "DE"}, {"CZ", "DE"}, {"SK", "CZ"}, {"IT", "AT"}, {"CH", "DE"}, {"PL", "DE"}, {"BE", "NL"}, {"BE", "FR"}]:
+    #         cap = 7000
+            
+    #     #Long Subsea / Nordic Marine Links (3 GW)
+    #     elif "SE" in countries or "FI" in countries or "EE" in countries or "IE" in countries or ("GB" in countries and "NO" in countries):
+    #         cap = 3000
+            
+    #     #Minor / Alpine passes (1.5 GW)
+    #     elif "LU" in countries or "CH" in countries:
+    #         cap = 1500
+            
+    #     #Eastern / Balkan regional links (3.5 GW)
+    #     else:
+    #         cap = 3500
+            
+    #     n.links.at[idx, "p_nom_max"] = cap
+
+    # #retrofitted pipelines also limiting the expansion
+    # h2_retrofit_mask = (n.links.carrier == "H2 pipeline retrofitted") & n.links.p_nom_extendable
+    # n.links.loc[h2_retrofit_mask, "p_nom_max"] *= config["H2_pipeline_limit"]
+    # h2_links_mask = (n.links.carrier == "H2 pipeline") & n.links.p_nom_extendable
+    # n.links.loc[h2_links_mask, "p_nom_max"] *= config["H2_pipeline_limit"]
     
     return n
 

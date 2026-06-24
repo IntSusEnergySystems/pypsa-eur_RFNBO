@@ -85,10 +85,11 @@ transmission_limit:
     2025: 1.0
     2030: 1.0
     2035: 1.2
-    2040: 1.2
-    2045: 1.2
-    2050: 1.2
+    2040: 1.3
+    2045: 1.3
+    2050: 1.3
 
+H2_pipeline_limit: 0.2 #considering 20% expansion of max allowed capacities same as trnsmission lines limit
 co2_budget_national:
   2030:
     AT: 0.45
@@ -1060,7 +1061,7 @@ sector:
   co2_sequestration_potential:
     2020: 0
     2025: 0
-    2030: 75
+    2030: 100
     2035: 125
     2040: 175
     2045: 225
@@ -1085,7 +1086,7 @@ sector:
       ccgt_cc: false
       ocgt: false
       allam: false
-    biomass_to_methanol: true
+    biomass_to_methanol: false
     biomass_to_methanol_cc: false
   ammonia: true
   min_part_load_electrolysis: 0
@@ -1399,11 +1400,6 @@ solving:
     activate_carbon_intensity_criterion: false
     carbon_intensity: 18  #gco2/MJ
     activate_direct_vre_connected_electrolysers: false
-    oversize_factor:
-      solar: 1.2
-      onwind: 1.1
-      offwind-ac: 1.1
-      offwind-dc: 1.1
     interconnected_additionality: false
     global_additionality: false
     temporal_correlation: false

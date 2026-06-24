@@ -867,11 +867,25 @@ def capacities(countries,results):
       columns_to_convert = ['2025','2030','2035', '2040','2045','2050']
       cf[columns_to_convert] = cf[columns_to_convert].apply(pd.to_numeric, errors='coerce')
       cf = cf.groupby('tech').sum().reset_index()
-      #convert H2 electrolysys capacity from GW el to GW H2 as direct connected are already in GWH2
-      eff_electrolyser = options.loc[("electrolysis", "efficiency")].item()
-      mask = cf["tech"].str.contains("H2 Electrolysis", case=False, na=False)
-      cf.loc[mask, columns_to_convert] = (
-        cf.loc[mask, columns_to_convert] * eff_electrolyser)
+      # target_electrolysers = [
+      #       'solar Electrolysis', 
+      #       'onwind Electrolysis', 
+      #       'offwind-ac Electrolysis', 
+      #       'offwind-dc Electrolysis',
+      #       'solar-onwind Electrolysis'
+      #   ]
+      # elec_mask = cf['tech'].str.lower().str.strip().isin([t.lower() for t in target_electrolysers])
+      # direct_connected_sums = cf.loc[elec_mask, columns_to_convert].sum()
+      # direct_connected_row = pd.DataFrame([{
+      #       'tech': 'Direct Connected Electrolysers',
+      #       **{year: direct_connected_sums[year] for year in columns_to_convert}
+      #   }])
+      # cf = pd.concat([cf, direct_connected_row], ignore_index=True)
+      # #convert H2 electrolysys capacity from GW el to GW H2 as direct connected are already in GWH2
+      # eff_electrolyser = options.loc[("electrolysis", "efficiency")].item()
+      # mask = cf["tech"].str.contains("H2 Electrolysis", case=False, na=False)
+      # cf.loc[mask, columns_to_convert] = (
+      #   cf.loc[mask, columns_to_convert] * eff_electrolyser)
       if 'nuclear' not in cf['tech'].values:
           new_row = pd.DataFrame(
               [['nuclear'] + [0]*len(planning_horizons)],
@@ -2935,24 +2949,25 @@ def create_capacity_chart(capacities, country, unit='Capacity [GW]'):
     tech_colors["Transmission lines"] = tech_colors["Transmission Lines"]
     groups = [
         ["solar"],
-        ["onshore wind", "offshore wind"],
-        ["solar H2","onshore H2", "offshore H2","hybrid H2"],
-        ["Electrolysers","solar H2","onshore H2", "offshore H2","hybrid H2"],
+        ["onshore wind","offshore wind"],
+        ["power-to-heat"],
+        ["Electrolysers"],
+        ["power-to-liquid"],
         ["transmission lines"],
         ["nuclear"],
         ["CCGT"],
-        ["CHP"],
+        
     ]
     
     groupss = [
-        ["solar"],
-        ["onshore wind", "offshore wind"],
-        ["solar H2","onshore H2", "offshore H2","hybrid H2"],
-        ["Electrolysers","solar H2","onshore H2", "offshore H2","hybrid H2"],
-        ["transmission lines"],
-        ["power-to-liquid"],
-        ["CCGT"],
-        ["nuclear"],
+       ["solar"],
+       ["onshore wind","offshore wind"],
+       ["power-to-heat"],
+       ["Electrolysers"],
+       ["power-to-liquid"],
+       ["transmission lines"],
+       ["nuclear"],
+       ["CCGT"],
     ]
 
     # Create a subplot for each technology

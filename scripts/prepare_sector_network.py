@@ -1469,8 +1469,8 @@ def add_ammonia(
         / costs.at["Haber-Bosch", "electricity-input"],
         lifetime=costs.at["Haber-Bosch", "lifetime"],
     )
-    if investment_year >= 2035:
-     n.add(
+
+    n.add(
         "Link",
         nodes,
         suffix=" ammonia cracker",
@@ -2049,7 +2049,7 @@ def add_h2_gas_infrastructure(
                 )
 
     if options["H2_retrofit"]:
-     if investment_year >= 2035:
+     if investment_year >= 2030:
         logger.info("Add retrofitting options of existing CH4 pipes to H2 pipes.")
 
         fr = "gas pipeline"
@@ -2073,7 +2073,7 @@ def add_h2_gas_infrastructure(
         )
 
     if options["H2_network"]:
-     if investment_year >= 2035:
+     if investment_year >= 2030:
         logger.info("Add options for new hydrogen pipelines.")
 
         h2_pipes = create_network_topology(
@@ -2140,8 +2140,9 @@ def add_h2_gas_infrastructure(
             * costs.at["biomass CHP capture", "capture_rate"],
             lifetime=costs.at["coal", "lifetime"],
         )
-    if investment_year > 2025:
-     if options["SMR_cc"]:
+    
+    if options["SMR_cc"]:
+      if investment_year > 2025:
         n.add(
             "Link",
             spatial.nodes,
@@ -6521,7 +6522,7 @@ def add_direct_connected_electrolysers(n: pypsa.Network) -> tuple:
             scaled_profile = np.minimum(1.0, orig_profile * opt_oversize)
             before_ts_dict[f"{gen_name} (Before Oversize)"] = n.generators_t.p_max_pu[orig_col]
             after_ts_dict[f"{gen_name} (After Oversize)"] = pd.Series(scaled_profile, index=n.snapshots)
-
+            
             scaled_vre_cost = node_vre_cost * opt_oversize
             total_cost = scaled_vre_cost + scaled_elec_cost
 
@@ -6895,7 +6896,7 @@ if __name__ == "__main__":
         remove_h2_network(n)
     
     if options["co2_network"]:
-     if investment_year >= 2035:
+     if investment_year >= 2030:
         add_co2_network(
             n,
             costs,
@@ -6998,6 +6999,7 @@ if __name__ == "__main__":
         n, snakemake.params["adjustments"], investment_year
     )
     if constraints["activate_direct_vre_connected_electrolysers"]:
+     if investment_year >= 2030:
       add_direct_connected_electrolysers(n)
 
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
