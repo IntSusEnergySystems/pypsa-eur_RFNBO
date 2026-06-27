@@ -1405,7 +1405,7 @@ solving:
     temporal_correlation: true
     interconnected_temporal_correlation: false
     global_temporal_correlation: false
-    temporal_correlation_monthly: false
+    temporal_correlation_monthly: true
     global_temporal_correlation_monthly: false
     RFNBO_demand_share: false
     endogenous_H2_demand_floor: true
