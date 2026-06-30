@@ -1900,15 +1900,31 @@ def add_additionality_constraint(n: pypsa.Network):
     vre_cap_link = p_nom_link.loc[gens_links].groupby(vre_grouper_links).sum().rename(bus1="country")
     vre_cap = vre_cap_gen + vre_cap_link
     
-    electrolysers = n.links[
+    rfnbo_technology_carriers = [
+        "H2 Electrolysis",
+        "Haber-Bosch"
+    ]
+    rfnbo_links = n.links[
         (n.links.p_nom_extendable == True) & 
-        (n.links.carrier == "H2 Electrolysis")
+        (n.links.carrier.isin(rfnbo_technology_carriers))
     ].index
-    #electrolyser variables
-    electrolyser_p_nom = n.model["Link-p_nom"].loc[electrolysers]
-    
-    links_grouper = n.links.loc[electrolysers].bus0.map(n.buses.country)
-    electrolyser_cap = electrolyser_p_nom.groupby(links_grouper).sum().rename(bus0="country")
+
+    methanolisation = n.links[
+        (n.links.p_nom_extendable == True) & 
+        (n.links.carrier == "methanolisation")
+    ].index
+    #eff included as electricity node is not bus0 like other carriers but bus2
+    eff_methanolisation = n.links.loc[methanolisation, "efficiency2"].abs()
+
+    methanolisation_p_nom = n.model["Link-p_nom"].loc[methanolisation] * eff_methanolisation.loc[methanolisation]
+    rfnbo_p_nom = n.model["Link-p_nom"].loc[rfnbo_links]
+    links_grouper = n.links.loc[rfnbo_links].bus0.map(n.buses.country)
+    rfnbo_cap = rfnbo_p_nom.groupby(links_grouper).sum().rename(bus0="country")
+
+    methanolisation_grouper = n.links.loc[methanolisation].bus2.map(n.buses.country)
+    methanolisation_cap = methanolisation_p_nom.groupby(methanolisation_grouper).sum().rename(bus2="country")
+
+    rfnbo_total = rfnbo_cap + methanolisation_cap
     
     #computing optimised capacities of vre in baseline
     baseline_gens = baseline_updated.generators[
@@ -1939,12 +1955,16 @@ def add_additionality_constraint(n: pypsa.Network):
      )
      return
     lhs_vre = vre_cap.loc[active_countries]
-    lhs_electrolyser = electrolyser_cap.loc[active_countries]
+    lhs_rfnbo = rfnbo_total.loc[active_countries]
     rhs_final = rhs.loc[active_countries]
-
-    #considering variables on lhs
-    lhs = lhs_vre.sub(lhs_electrolyser)
-    
+    print(rfnbo_total)
+    print(lhs_rfnbo)
+    lhs_vre_aligned = lhs_vre.loc[active_countries]
+    lhs_rfnbo_aligned = lhs_rfnbo.loc[active_countries]
+    print(lhs_rfnbo_aligned)
+    print(lhs_vre_aligned)
+    lhs = lhs_vre_aligned - lhs_rfnbo_aligned
+    print(lhs)
     rhs_xr = xr.DataArray(rhs_final, coords=[active_countries], dims=["country"])
     
     n.model.add_constraints(
@@ -2136,25 +2156,34 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
     rhs_xr = rhs.to_xarray()
     rhs_xr = rhs_xr.to_array(dim="country")
     
-    
-    electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
-    p_electrolysers = n.model["Link-p"].sel(snapshot=sns, name=electrolysers)
+    rfnbo_technology_carriers = ["H2 Electrolysis", "Haber-Bosch"]
+    rfnbo_links = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier.isin(rfnbo_technology_carriers))].index
+    methanolisation = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "methanolisation")].index
+    eff_methanolisation = n.links.loc[methanolisation, "efficiency2"].abs()
+    eff_methanolisation.index.name = "name"
+    p_rfnbo = n.model["Link-p"].sel(snapshot=sns, name=rfnbo_links)
+    p_methanolisation = n.model["Link-p"].sel(snapshot=sns, name=methanolisation)
+    methanolisation_elec_consumption = p_methanolisation * eff_methanolisation
 
     #grouping by country
     gen_country = n.generators.loc[gens, "bus"].map(n.buses.country).rename("country")
     gen_country_link = n.links.loc[gens_links, "bus1"].map(n.buses.country).rename("country")
-    link_country = n.links.loc[electrolysers, "bus0"].map(n.buses.country).rename("country")
+    rfnbo_country = n.links.loc[rfnbo_links, "bus0"].map(n.buses.country).rename("country")
+    methanolisation_country = n.links.loc[methanolisation, "bus2"].map(n.buses.country).rename("country")
 
     vre_gen = p_gen.groupby(gen_country).sum()
     
     vre_link = p_gen_link.groupby(gen_country_link).sum()
     
     vre_total = vre_gen + vre_link
-    electrolysers_total = p_electrolysers.groupby(link_country).sum()
+    rfnbo = p_rfnbo.groupby(rfnbo_country).sum()
+    methanolisation_total = methanolisation_elec_consumption.groupby(methanolisation_country).sum()
+    rfnbo_total = rfnbo + methanolisation_total
+    print(rfnbo_total)
     #allign countries
     common_countries = (
     set(vre_total.coords["country"].values) & 
-    set(electrolysers_total.coords["country"].values) &
+    set(rfnbo_total.coords["country"].values) &
     set(rhs_xr.country.values))
     
     active_countries = _rfnbo_active_countries(
@@ -2166,12 +2195,15 @@ def add_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex)
         "No countries eligible for temporal correlation constraint, skipping"
      )
      return
-
+    lhs_vre = vre_total.sel(country=active_countries)
+    lhs_baseline = rhs_xr.sel(country=active_countries)
+    rhs_rfnbo = rfnbo_total.sel(country=active_countries)
     # Hourly constraints imply the annual PPA sum.
     n.model.add_constraints(
-     vre_total.sel(country=active_countries) - rhs_xr.sel(country=active_countries) >= electrolysers_total.sel(country=active_countries),
-     name="temporal_correlation",
-     coords={"snapshot": sns, "country": active_countries})
+        lhs_vre - lhs_baseline >= rhs_rfnbo,
+        name="temporal_correlation",
+        coords={"snapshot": sns, "country": active_countries}
+    )
     
     logger.info("Temporal correlation constraint added.")
 
@@ -2212,21 +2244,30 @@ def add_annual_ppa_constraint(n: pypsa.Network, sns: pd.DatetimeIndex):
     rhs_xr = rhs.to_xarray()
     rhs_xr = rhs_xr.to_array(dim="country")
 
-    electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
-    p_electrolysers = n.model["Link-p"].sel(snapshot=sns, name=electrolysers)
+    rfnbo_technology_carriers = ["H2 Electrolysis", "Haber-Bosch"]
+    rfnbo_links = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier.isin(rfnbo_technology_carriers))].index
+    methanolisation = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "methanolisation")].index
+    eff_methanolisation = n.links.loc[methanolisation, "efficiency2"].abs()
+    eff_methanolisation.index.name = "name"
+    p_rfnbo = n.model["Link-p"].sel(snapshot=sns, name=rfnbo_links)
+    p_methanolisation = n.model["Link-p"].sel(snapshot=sns, name=methanolisation)
+    methanolisation_elec_consumption = p_methanolisation * eff_methanolisation
 
     gen_country = n.generators.loc[gens, "bus"].map(n.buses.country).rename("country")
     gen_country_link = n.links.loc[gens_links, "bus1"].map(n.buses.country).rename("country")
-    link_country = n.links.loc[electrolysers, "bus0"].map(n.buses.country).rename("country")
+    rfnbo_country = n.links.loc[rfnbo_links, "bus0"].map(n.buses.country).rename("country")
+    methanolisation_country = n.links.loc[methanolisation, "bus2"].map(n.buses.country).rename("country")
 
     vre_gen = p_gen.groupby(gen_country).sum()
     vre_link = p_gen_link.groupby(gen_country_link).sum()
     vre_total = vre_gen + vre_link
-    electrolysers_total = p_electrolysers.groupby(link_country).sum()
-
+    rfnbo = p_rfnbo.groupby(rfnbo_country).sum()
+    methanolisation_total = methanolisation_elec_consumption.groupby(methanolisation_country).sum()
+    rfnbo_total = rfnbo + methanolisation_total
+    print(rfnbo_total)
     common_countries = (
     set(vre_total.coords["country"].values) & 
-    set(electrolysers_total.coords["country"].values) &
+    set(rfnbo_total.coords["country"].values) &
     set(rhs_xr.country.values))
 
     active_countries = _rfnbo_active_countries(
@@ -2239,14 +2280,15 @@ def add_annual_ppa_constraint(n: pypsa.Network, sns: pd.DatetimeIndex):
      )
      return
 
-    vre_total_annual = vre_total.sum("snapshot")
-    electrolysers_annual = electrolysers_total.sum("snapshot")
-    rhs_annual = rhs_xr.sum("snapshot")
-
+    vre_total_annual = vre_total.sum("snapshot").sel(country=active_countries)
+    rfnbo_annual = rfnbo_total.sum("snapshot").sel(country=active_countries)
+    rhs_annual = rhs_xr.sum("snapshot").sel(country=active_countries)
+    print(rfnbo_annual)
     n.model.add_constraints(
-      vre_total_annual.sel(country=active_countries) - rhs_annual.sel(country=active_countries) >= electrolysers_annual.sel(country=active_countries),
-      name="annual_ppa",
-      coords={"country": active_countries})
+         vre_total_annual - rhs_annual >= rfnbo_annual,
+         name="annual_ppa",
+         coords={"country": active_countries}
+    )
     
     logger.info("Annual PPA constraint added.")
 
@@ -2324,21 +2366,36 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
         )
     p_gen = n.model["Generator-p"].sel(snapshot=sns)
     p_gen_link = n.model["Link-p"].sel(snapshot=sns)
-    p_electrolysers = n.model["Link-p"].sel(snapshot=sns)
+    p_rfnbo = n.model["Link-p"].sel(snapshot=sns)
 
     gens = n.generators[(n.generators.build_year >= monthly_year) & (n.generators.carrier.isin(generator_types))].index
     gens_link = n.links[(n.links.build_year >= monthly_year) & (n.links.carrier.isin(generator_types))].index
-    electrolysers = n.links[(n.links.build_year >= monthly_year) & (n.links.carrier == "H2 Electrolysis")].index
+    rfnbo_technology_carriers = ["H2 Electrolysis", "Haber-Bosch"]
+    rfnbo_links = n.links[(n.links.build_year >= monthly_year) & (n.links.carrier.isin(rfnbo_technology_carriers))].index
+    methanolisation = n.links[(n.links.build_year >= monthly_year) & (n.links.carrier == "methanolisation")].index
+    eff_methanolisation = n.links.loc[methanolisation, "efficiency2"].abs()
+    eff_methanolisation.index.name = "name"
 
     gen_country = n.generators.loc[gens, "bus"].map(n.buses.country).rename("country")
     gen_country_link = n.links.loc[gens_link, "bus1"].map(n.buses.country).rename("country")
-    link_country = n.links.loc[electrolysers, "bus0"].map(n.buses.country).rename("country")
+    rfnbo_country = n.links.loc[rfnbo_links, "bus0"].map(n.buses.country).rename("country")
+    methanolisation_country = n.links.loc[methanolisation, "bus2"].map(n.buses.country).rename("country")
 
     gen_monthly = p_gen.sel(name=gens).groupby(gen_country).sum().groupby("snapshot.month").sum()
     link_monthly = p_gen_link.sel(name=gens_link).groupby(gen_country_link).sum().groupby("snapshot.month").sum()
     vre_monthly = gen_monthly + link_monthly
 
-    elec_monthly = p_electrolysers.sel(name=electrolysers).groupby(link_country).sum().groupby("snapshot.month").sum()
+    rfnbo_monthly = p_rfnbo.sel(name=rfnbo_links).groupby(rfnbo_country).sum().groupby("snapshot.month").sum()
+    p_methanolisation_elec = p_rfnbo.sel(name=methanolisation) * eff_methanolisation
+    methanolisation_monthly = (
+        p_methanolisation_elec.groupby(methanolisation_country)
+        .sum()
+        .groupby("snapshot.month")
+        .sum()
+    )
+    rfnbo_monthly_total = rfnbo_monthly + methanolisation_monthly
+
+    rfnbo_monthly_total = rfnbo_monthly + methanolisation_monthly
     baseline_gens = baseline_updated.generators[
         (baseline_updated.generators.build_year >= monthly_year) & 
         (baseline_updated.generators.carrier.isin(generator_types))
@@ -2361,7 +2418,7 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
     rhs_xr = rhs_monthly.to_xarray().to_array(dim="country")
     common_countries = list(
         set(vre_monthly.coords["country"].values) & 
-        set(elec_monthly.coords["country"].values) &
+        set(rfnbo_monthly_total.coords["country"].values) &
         set(rhs_xr.coords["country"].values)
     )
     active_countries = _rfnbo_active_countries(
@@ -2374,10 +2431,16 @@ def add_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.Dateti
         "No countries eligible for monthly temporal correlation constraint, skipping"
      )
      return
+    print(rfnbo_monthly_total)
+    lhs_vre = vre_monthly.sel(country=active_countries)
+    lhs_baseline = rhs_xr.sel(country=active_countries)
+    rhs_rfnbo = rfnbo_monthly_total.sel(country=active_countries)
     
+    unique_months = sorted(list(set(sns.month)))
     n.model.add_constraints(
-        vre_monthly.sel(country=active_countries) - rhs_xr.sel(country=active_countries)  >= elec_monthly.sel(country=active_countries),
-        name="temporal_correlation_monthly"
+        lhs_vre - lhs_baseline >= rhs_rfnbo,
+        name="temporal_correlation_monthly",
+        coords={"month": unique_months, "country": active_countries}
     )
     
     logger.info("Monthly temporal correlation constraint added.")

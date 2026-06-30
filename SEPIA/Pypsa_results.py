@@ -383,7 +383,7 @@ def costs(countries,results):
     for country in countries:
       net_costs_elc = calculate_elec_import_export_costs(country, planning_horizons)
       net_costs_h2 = calculate_h2_import_export_costs(country, planning_horizons)
-      uranium = pd.read_excel(f"results/{study}/htmls/ChartData_{country}.xlsx",sheet_name="Chart 22", index_col=0,skiprows=2)
+      uranium = pd.read_excel(f"results/{study}/htmls/ChartData_{country}.xlsx",sheet_name="Chart 21", index_col=0,skiprows=2)
       uranium = uranium["Uranium"]
       coal_df = pd.read_csv(f"results/{study}/country_csvs/total_imports_{country}.csv", index_col=0)
       coal = coal_df["imp_cms_pe"]
@@ -660,7 +660,7 @@ def operational_costs(countries):
     for country in countries:
       net_costs_elc = calculate_elec_import_export_costs(country, planning_horizons)
       net_costs_h2 = calculate_h2_import_export_costs(country, planning_horizons)
-      uranium = pd.read_excel(f"results/{study}/htmls/ChartData_{country}.xlsx",sheet_name="Chart 22", index_col=0,skiprows=2)
+      uranium = pd.read_excel(f"results/{study}/htmls/ChartData_{country}.xlsx",sheet_name="Chart 21", index_col=0,skiprows=2)
       uranium = uranium["Uranium"]
       coal_df = pd.read_csv(f"results/{study}/country_csvs/total_imports_{country}.csv", index_col=0)
       coal = coal_df["imp_cms_pe"]
