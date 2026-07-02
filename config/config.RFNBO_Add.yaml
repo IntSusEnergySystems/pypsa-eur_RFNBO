@@ -1034,7 +1034,7 @@ sector:
   methanation: true
   coal_cc: false
   dac: true
-  co2_vent: true
+  co2_vent: false
   heat_vent:
     urban central: false
     urban decentral: false
