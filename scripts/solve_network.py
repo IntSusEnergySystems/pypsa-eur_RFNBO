@@ -3258,7 +3258,7 @@ def extra_functionality(
         add_temporal_correlation_constraint_add(n, snapshots)
       else:
         add_temporal_correlation_monthly_constraint_no_add(n, snapshots)
-     if config["run"]["name"] in ["RFNBO_Temp"]:
+     elif config["run"]["name"] in ["RFNBO_Temp"]:
       if investment_year >= 2030:
         add_temporal_correlation_constraint_no_add(n, snapshots)
       else:
