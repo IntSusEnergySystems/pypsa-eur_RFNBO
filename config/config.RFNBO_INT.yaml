@@ -21,7 +21,7 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: "baseline_without_H2"
+  name: "RFNBO_INT"
   scenarios:
     enable: false
     file: config/scenarios.yaml
@@ -1031,18 +1031,18 @@ sector:
     micro_chp: false
   solar_thermal: true
   solar_cf_correction: 0.788457
-  methanation: false
+  methanation: true
   coal_cc: false
   dac: true
-  co2_vent: true
+  co2_vent: false
   heat_vent:
     urban central: false
     urban decentral: false
     rural: false
   marginal_cost_heat_vent: 0.02
   allam_cycle_gas: false
-  hydrogen_fuel_cell: false
-  hydrogen_turbine: false
+  hydrogen_fuel_cell: true
+  hydrogen_turbine: true
   SMR: true
   SMR_cc: false
   regional_oil_demand: true
@@ -1120,9 +1120,9 @@ sector:
       compression_per_1000km: 0.01
     electricity distribution grid:
       efficiency_static: 0.97
-  H2_network: false
+  H2_network: true
   gas_network: true
-  H2_retrofit: false
+  H2_retrofit: true
   H2_retrofit_capacity_per_CH4: 0.6
   gas_network_connectivity_upgrade: 1
   gas_distribution_grid: true
@@ -1167,7 +1167,7 @@ sector:
     max_amount: 1390
     upstream_emissions_factor: 0.1
   imports:
-    enable: false
+    enable: true
     limit:
       2025: 0.0
       2030: 197.0
@@ -1395,21 +1395,21 @@ solving:
     co2_budget_nationl: false
     co2_price_national: true
     additionality: false
-    activate_vre_share_criterion: false
+    activate_vre_share_criterion: true
     VRE_Share: 90 #%
-    activate_carbon_intensity_criterion: false
+    activate_carbon_intensity_criterion: true
     carbon_intensity: 18  #gco2/MJ
     activate_direct_vre_connected_electrolysers: false
-    interconnected_additionality: false
+    interconnected_additionality: true
     global_additionality: false
     temporal_correlation: false
-    interconnected_temporal_correlation: false
+    interconnected_temporal_correlation: true
     global_temporal_correlation: false
     temporal_correlation_monthly: false
     global_temporal_correlation_monthly: false
     RFNBO_demand_share: false
-    endogenous_H2_demand_floor: false
-    non_rfnbo_h2_cap_2025: false
+    endogenous_H2_demand_floor: true
+    non_rfnbo_h2_cap_2025: true
     max_growth:
       enable: true
       # EU-wide new capacity per 5-year planning horizon, GW

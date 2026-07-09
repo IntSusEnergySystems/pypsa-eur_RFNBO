@@ -1957,14 +1957,9 @@ def add_additionality_constraint(n: pypsa.Network):
     lhs_vre = vre_cap.loc[active_countries]
     lhs_rfnbo = rfnbo_total.loc[active_countries]
     rhs_final = rhs.loc[active_countries]
-    print(rfnbo_total)
-    print(lhs_rfnbo)
     lhs_vre_aligned = lhs_vre.loc[active_countries]
     lhs_rfnbo_aligned = lhs_rfnbo.loc[active_countries]
-    print(lhs_rfnbo_aligned)
-    print(lhs_vre_aligned)
     lhs = lhs_vre_aligned - lhs_rfnbo_aligned
-    print(lhs)
     rhs_xr = xr.DataArray(rhs_final, coords=[active_countries], dims=["country"])
     
     n.model.add_constraints(
@@ -1999,77 +1994,111 @@ def get_country_neighbours(n):
 
     return neighbours
     
-# def add_additionality_constraint_interconnected(n: pypsa.Network):
-#     """
-#     Adds interconnected-zone additionality constraint. 
-#     VRE in (country + neighbours) - electrolyser in country >= baseline VRE.
-#     Canbe used for interconnedted zone variant.
-#     """
-#     generator_types = list(
-#         set(config["electricity"]["renewable_carriers"] + ["solar rooftop"])
-#     )
-
-#     if snakemake.config["run"]["name"].startswith(("RFNBO")):
-#         baseline_updated = pypsa.Network(snakemake.input.baseline_updated)
-#     else:
-#         raise RuntimeError(
-#             "RFNBO constraint requires a baseline network but run name does not start with 'RFNBO': "
-#             + snakemake.config["run"]["name"]
-#         )
-
-#     neighbours = get_country_neighbours(n)
-#     p_nom_gen = n.model["Generator-p_nom"]
-#     p_nom_link = n.model["Link-p_nom"]
-
-#     gens = n.generators[
-#         (n.generators.p_nom_extendable)
-#         & (n.generators.carrier.isin(generator_types))
-#     ].index
-
-#     vre_grouper = n.generators.loc[gens].bus.map(n.buses.country)
-#     vre_cap = p_nom_gen.loc[gens].groupby(vre_grouper).sum().rename(bus="country")
-
-#     electrolysers = n.links[
-#         (n.links.p_nom_extendable)
-#         & (n.links.carrier == "H2 Electrolysis")
-#     ].index
-
-#     links_grouper = n.links.loc[electrolysers].bus0.map(n.buses.country)
-#     electrolyser_cap = p_nom_link.loc[electrolysers].groupby(links_grouper).sum().rename(bus0="country")
-
-#     baseline_gens = baseline_updated.generators[
-#         (baseline_updated.generators.p_nom_extendable)
-#         & (baseline_updated.generators.carrier.isin(generator_types))
-#     ]
-
-#     rhs = baseline_gens.groupby(
-#         baseline_gens.bus.map(baseline_updated.buses.country)
-#     ).p_nom_opt.sum()
-
-#     rhs.index.name = "country"
+def add_additionality_constraint_interconnected(n: pypsa.Network):
+    """
+    Adds interconnected-zone additionality constraint. 
+    VRE in (country + neighbours) - electrolyser in country >= baseline VRE.
+    Canbe used for interconnedted zone variant.
+    """
+    generator_types = list(
+        set(config["electricity"]["renewable_carriers"] + ["solar rooftop","geothermal organic rankine cycle"])
     
-#     lhs_countries = vre_cap.indexes["country"]
-#     common_countries = lhs_countries.intersection(rhs.index)
-#     rhs_final = rhs.loc[common_countries]
+    )
 
-#     lhs_list = []
-#     for c in common_countries:
-#         #get neighbors + current country
-#         allowed = (neighbours.get(c, set()) | {c}) & set(common_countries)
-#         vre_sum = vre_cap.loc[list(allowed)].sum()
-#         elec = electrolyser_cap.loc[c]
-#         lhs_list.append(vre_sum - elec)
+    if snakemake.config["run"]["name"].startswith(("RFNBO")):
+        baseline_updated = pypsa.Network(snakemake.input.baseline_updated)
+    else:
+        raise RuntimeError(
+            "RFNBO constraint requires a baseline network but run name does not start with 'RFNBO': "
+            + snakemake.config["run"]["name"]
+        )
 
-#     lhs = linopy.expressions.merge(lhs_list, dim="country")
-#     lhs.coords["country"] = common_countries
-#     rhs_xr = xr.DataArray(rhs_final, coords=[common_countries], dims=["country"])
+    neighbours = get_country_neighbours(n)
+    p_nom_gen = n.model["Generator-p_nom"]
+    p_nom_link = n.model["Link-p_nom"]
+
+    gens = n.generators[
+        (n.generators.p_nom_extendable == True) & 
+        (n.generators.carrier.isin(generator_types))
+    ].index
+    gens_links = n.links[
+        (n.links.p_nom_extendable == True) & 
+        (n.links.carrier.isin(generator_types))
+    ].index
+    #vre capacities grouped by country
+    vre_grouper = n.generators.loc[gens].bus.map(n.buses.country)
+    vre_grouper_links = n.links.loc[gens_links].bus1.map(n.buses.country)
+    #total vre capacities on country buses
+    vre_cap_gen = p_nom_gen.loc[gens].groupby(vre_grouper).sum().rename(bus="country")
+    vre_cap_link = p_nom_link.loc[gens_links].groupby(vre_grouper_links).sum().rename(bus1="country")
+    vre_cap = vre_cap_gen + vre_cap_link
+
+    rfnbo_technology_carriers = [
+        "H2 Electrolysis",
+        "Haber-Bosch"
+    ]
+    rfnbo_links = n.links[
+        (n.links.p_nom_extendable == True) & 
+        (n.links.carrier.isin(rfnbo_technology_carriers))
+    ].index
+
+    methanolisation = n.links[
+        (n.links.p_nom_extendable == True) & 
+        (n.links.carrier == "methanolisation")
+    ].index
+    #eff included as electricity node is not bus0 like other carriers but bus2
+    eff_methanolisation = n.links.loc[methanolisation, "efficiency2"].abs()
+
+    methanolisation_p_nom = n.model["Link-p_nom"].loc[methanolisation] * eff_methanolisation.loc[methanolisation]
+    rfnbo_p_nom = n.model["Link-p_nom"].loc[rfnbo_links]
+    links_grouper = n.links.loc[rfnbo_links].bus0.map(n.buses.country)
+    rfnbo_cap = rfnbo_p_nom.groupby(links_grouper).sum().rename(bus0="country")
+
+    methanolisation_grouper = n.links.loc[methanolisation].bus2.map(n.buses.country)
+    methanolisation_cap = methanolisation_p_nom.groupby(methanolisation_grouper).sum().rename(bus2="country")
+
+    rfnbo_total = rfnbo_cap + methanolisation_cap
+
+    baseline_gens = baseline_updated.generators[
+        (baseline_updated.generators.p_nom_extendable)
+        & (baseline_updated.generators.carrier.isin(generator_types))
+    ]
+
+    rhs = baseline_gens.groupby(
+        baseline_gens.bus.map(baseline_updated.buses.country)
+    ).p_nom_opt.sum()
+
+    rhs.index.name = "country"
     
-#     n.model.add_constraints(
-#         lhs >= rhs_xr,
-#         name="additionality_constraint_interconnected"
-#     )
+    lhs_countries = vre_cap.indexes["country"]
+    common_countries = lhs_countries.intersection(rhs.index)
+    active_countries = _rfnbo_active_countries(common_countries, criterion_type="both", log_prefix="Interconnected Additionality")
+    if len(active_countries) == 0:
+     logger.info(
+        "No countries below VRE share threshold therefore skipping interconnected additionality constraint"
+     )
+     return
+    
+    rhs_final = rhs.loc[active_countries]
+    lhs_list = []
+    for c in active_countries:
+        #get neighbors + current country
+        allowed = (neighbours.get(c, set()) | {c}) & set(common_countries)
+        vre_sum = vre_cap.loc[list(allowed)].sum()
+        rfnbo = rfnbo_total.loc[c]
+        lhs_list.append(vre_sum - rfnbo)
 
-#     logger.info("Interconnected additionality constraint added.")
+    lhs = linopy.expressions.merge(lhs_list, dim="country")
+    lhs.coords["country"] = active_countries
+    rhs_xr = xr.DataArray(rhs_final, coords=[active_countries], dims=["country"])
+    
+    n.model.add_constraints(
+        lhs >= rhs_xr,
+        name="additionality_constraint_interconnected",
+        coords={"country": active_countries}
+    )
+
+    logger.info("Interconnected additionality constraint added.")
     
 # def add_global_additionality_constraint(n: pypsa.Network):
 #     """
@@ -2179,7 +2208,6 @@ def add_temporal_correlation_constraint_add(n: pypsa.Network, sns: pd.DatetimeIn
     rfnbo = p_rfnbo.groupby(rfnbo_country).sum()
     methanolisation_total = methanolisation_elec_consumption.groupby(methanolisation_country).sum()
     rfnbo_total = rfnbo + methanolisation_total
-    print(rfnbo_total)
     #allign countries
     common_countries = (
     set(vre_total.coords["country"].values) & 
@@ -2272,7 +2300,6 @@ def add_temporal_correlation_constraint_no_add(n: pypsa.Network, sns: pd.Datetim
     rfnbo = p_rfnbo.groupby(rfnbo_country).sum()
     methanolisation_total = methanolisation_elec_consumption.groupby(methanolisation_country).sum()
     rfnbo_total = rfnbo + methanolisation_total
-    print(rfnbo_total)
     #allign countries
     common_countries = (
     set(vre_total.coords["country"].values) & 
@@ -2358,7 +2385,6 @@ def add_annual_ppa_constraint(n: pypsa.Network, sns: pd.DatetimeIndex):
     rfnbo = p_rfnbo.groupby(rfnbo_country).sum()
     methanolisation_total = methanolisation_elec_consumption.groupby(methanolisation_country).sum()
     rfnbo_total = rfnbo + methanolisation_total
-    print(rfnbo_total)
     common_countries = (
     set(vre_total.coords["country"].values) & 
     set(rfnbo_total.coords["country"].values) &
@@ -2377,8 +2403,6 @@ def add_annual_ppa_constraint(n: pypsa.Network, sns: pd.DatetimeIndex):
     vre_total_annual = vre_total.sum("snapshot").sel(country=active_countries)
     rfnbo_annual = rfnbo_total.sum("snapshot").sel(country=active_countries)
     rhs_annual = rhs_xr.sum("snapshot").sel(country=active_countries)
-    print(rfnbo_annual)
-    
     n.model.add_constraints(
         vre_total_annual - rhs_annual >= rfnbo_annual,
         name="annual_ppa",
@@ -2388,39 +2412,188 @@ def add_annual_ppa_constraint(n: pypsa.Network, sns: pd.DatetimeIndex):
     logger.info("Annual PPA constraint added.")
 
 
-# def add_temporal_correlation_interconnected(n: pypsa.Network, sns: pd.DatetimeIndex):
-#     """
-#     Adds interconnected temporal correlation.
-#     """
-#     generator_types = list(set(config["electricity"]["renewable_carriers"] + ["solar rooftop"]))
-#     neighbours = get_country_neighbours(n)
+def add_temporal_correlation_interconnected(n: pypsa.Network, sns: pd.DatetimeIndex):
+    """
+    Adds interconnected temporal correlation.
+    """
+    generator_types = list(
+         set(config["electricity"]["renewable_carriers"] + ["solar rooftop","geothermal organic rankine cycle"])
+     )
+    neighbours = get_country_neighbours(n)
 
-#     p_gen = n.model["Generator-p"].sel(snapshot=sns)
-#     p_elec = n.model["Link-p"].sel(snapshot=sns)
-
-#     gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
-#     electrolysers = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "H2 Electrolysis")].index
-
-#     vre_total = p_gen.sel(name=gens).groupby(n.generators.loc[gens, "bus"].map(n.buses.country)).sum().rename(bus="country")
-#     elec_total = p_elec.sel(name=electrolysers).groupby(n.links.loc[electrolysers, "bus0"].map(n.buses.country)).sum().rename(bus0="country")
-
-#     common_countries = list(
-#         set(vre_total.data.country.values) & 
-#         set(elec_total.data.country.values) 
-#     )
-
-#     lhs_list = []
-#     for c in common_countries:
-#         zone = (neighbours.get(c, set()) | {c}) & set(common_countries)
-#         combined = vre_total.sel(country=list(zone)).sum("country")
-#         lhs_list.append(combined)
-
-#     lhs = linopy.expressions.merge(lhs_list, dim="country").assign_coords(country=common_countries)
-#     n.model.add_constraints(lhs >= elec_total.sel(country=common_countries), 
-#                             name="temporal_correlation_interconnected",
-#                             coords={"snapshot": sns, "country": common_countries})
+    if snakemake.config["run"]["name"].startswith(("RFNBO")):
+        baseline_updated = pypsa.Network(snakemake.input.baseline_updated)
+    else:
+        raise RuntimeError(
+            "RFNBO constraint requires a baseline network but run name does not start with 'RFNBO': "
+            + snakemake.config["run"]["name"]
+        )
+    gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
+    gens_links = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier.isin(generator_types))].index
+    p_gen = n.model["Generator-p"].sel(snapshot=sns, name=gens)
+    p_gen_link = n.model["Link-p"].sel(snapshot=sns, name=gens_links)
     
-#     logger.info("Interconnected temporal correlation constraint added.")
+    #Adding baseline without H2 genberation
+    baseline_gens = baseline_updated.generators[
+            (baseline_updated.generators.build_year >= temporal_year) & 
+            (baseline_updated.generators.carrier.isin(generator_types))
+    ].index
+    baseline_links = baseline_updated.links[
+            (baseline_updated.links.build_year >= temporal_year) & 
+            (baseline_updated.links.carrier.isin(generator_types))
+    ].index
+    baseline_gen = baseline_updated.generators_t.p.loc[sns, baseline_gens]
+    baseline_link = baseline_updated.links_t.p0.loc[sns, baseline_links]
+    baseline_grouper = baseline_updated.generators.loc[baseline_gens, "bus"].map(baseline_updated.buses.country)
+    baseline_grouper_links = baseline_updated.links.loc[baseline_links, "bus1"].map(baseline_updated.buses.country)
+    baseline_vre = baseline_gen.groupby(baseline_grouper, axis=1).sum()
+    baseline_links_vre = baseline_link.groupby(baseline_grouper_links, axis=1).sum()
+    rhs = baseline_vre + baseline_links_vre
+    rhs_xr = xr.DataArray(rhs, dims=["snapshot", "country"])
+    
+    rfnbo_technology_carriers = ["H2 Electrolysis", "Haber-Bosch"]
+    rfnbo_links = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier.isin(rfnbo_technology_carriers))].index
+    methanolisation = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "methanolisation")].index
+    eff_methanolisation = n.links.loc[methanolisation, "efficiency2"].abs()
+    eff_methanolisation.index.name = "name"
+    p_rfnbo = n.model["Link-p"].sel(snapshot=sns, name=rfnbo_links)
+    p_methanolisation = n.model["Link-p"].sel(snapshot=sns, name=methanolisation)
+    methanolisation_elec_consumption = p_methanolisation * eff_methanolisation
+
+    #grouping by country
+    gen_country = n.generators.loc[gens, "bus"].map(n.buses.country).rename("country")
+    gen_country_link = n.links.loc[gens_links, "bus1"].map(n.buses.country).rename("country")
+    rfnbo_country = n.links.loc[rfnbo_links, "bus0"].map(n.buses.country).rename("country")
+    methanolisation_country = n.links.loc[methanolisation, "bus2"].map(n.buses.country).rename("country")
+
+    vre_gen = p_gen.groupby(gen_country).sum()
+    
+    vre_link = p_gen_link.groupby(gen_country_link).sum()
+    
+    vre_total = vre_gen + vre_link
+    rfnbo = p_rfnbo.groupby(rfnbo_country).sum()
+    methanolisation_total = methanolisation_elec_consumption.groupby(methanolisation_country).sum()
+    rfnbo_total = rfnbo + methanolisation_total
+    #allign countries
+    common_countries = sorted(list(
+    set(vre_total.coords["country"].values) & 
+    set(rfnbo_total.coords["country"].values) &
+    set(rhs_xr.country.values)))
+    
+    active_countries = _rfnbo_active_countries(common_countries, criterion_type="vre", log_prefix="Interconnected RFNBO")
+    if not active_countries:
+        logger.info("No countries qualify for the RFNBO hourly matching constraint. Skipping.")
+        return
+    lhs_list = []
+    for c in active_countries:
+        zone = (neighbours.get(c, set()) | {c}) & set(common_countries)
+        combined = vre_total.sel(country=list(zone)).sum("country")
+        lhs_list.append(combined)
+
+    lhs = linopy.expressions.merge(lhs_list, dim="country").assign_coords(country=active_countries)
+    rhs_vre_aligned = rhs_xr.sel(country=active_countries)
+    rfnbo_total_aligned = rfnbo_total.sel(country=active_countries)
+    rhs_vre_aligned = rhs_vre_aligned.transpose("snapshot", "country")
+    combined_lhs = lhs - rfnbo_total_aligned
+    n.model.add_constraints(
+        combined_lhs >= rhs_vre_aligned, 
+        name="temporal_correlation_interconnected",
+        coords={"snapshot": sns, "country": active_countries}
+    )
+    
+    logger.info("Interconnected temporal correlation constraint added.")
+    
+def add_annual_ppa_interconnected_constraint(n: pypsa.Network, sns: pd.DatetimeIndex):
+    """
+    Adds annual PPA for the interconnected version.
+    """
+    generator_types = list(
+         set(config["electricity"]["renewable_carriers"] + ["solar rooftop","geothermal organic rankine cycle"])
+     )
+    neighbours = get_country_neighbours(n)
+
+    if snakemake.config["run"]["name"].startswith(("RFNBO")):
+        baseline_updated = pypsa.Network(snakemake.input.baseline_updated)
+    else:
+        raise RuntimeError(
+            "RFNBO constraint requires a baseline network but run name does not start with 'RFNBO': "
+            + snakemake.config["run"]["name"]
+        )
+    gens = n.generators[(n.generators.build_year >= temporal_year) & (n.generators.carrier.isin(generator_types))].index
+    gens_links = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier.isin(generator_types))].index
+    p_gen = n.model["Generator-p"].sel(snapshot=sns, name=gens)
+    p_gen_link = n.model["Link-p"].sel(snapshot=sns, name=gens_links)
+    
+    #Adding baseline without H2 genberation
+    baseline_gens = baseline_updated.generators[
+            (baseline_updated.generators.build_year >= temporal_year) & 
+            (baseline_updated.generators.carrier.isin(generator_types))
+    ].index
+    baseline_links = baseline_updated.links[
+            (baseline_updated.links.build_year >= temporal_year) & 
+            (baseline_updated.links.carrier.isin(generator_types))
+    ].index
+    baseline_gen = baseline_updated.generators_t.p.loc[sns, baseline_gens]
+    baseline_link = baseline_updated.links_t.p0.loc[sns, baseline_links]
+    baseline_grouper = baseline_updated.generators.loc[baseline_gens, "bus"].map(baseline_updated.buses.country)
+    baseline_grouper_links = baseline_updated.links.loc[baseline_links, "bus1"].map(baseline_updated.buses.country)
+    baseline_vre = baseline_gen.groupby(baseline_grouper, axis=1).sum()
+    baseline_links_vre = baseline_link.groupby(baseline_grouper_links, axis=1).sum()
+    rhs = baseline_vre + baseline_links_vre
+    rhs_xr = rhs.to_xarray()
+    rhs_xr = rhs_xr.to_array(dim="country")
+    
+    rfnbo_technology_carriers = ["H2 Electrolysis", "Haber-Bosch"]
+    rfnbo_links = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier.isin(rfnbo_technology_carriers))].index
+    methanolisation = n.links[(n.links.build_year >= temporal_year) & (n.links.carrier == "methanolisation")].index
+    eff_methanolisation = n.links.loc[methanolisation, "efficiency2"].abs()
+    eff_methanolisation.index.name = "name"
+    p_rfnbo = n.model["Link-p"].sel(snapshot=sns, name=rfnbo_links)
+    p_methanolisation = n.model["Link-p"].sel(snapshot=sns, name=methanolisation)
+    methanolisation_elec_consumption = p_methanolisation * eff_methanolisation
+
+    #grouping by country
+    gen_country = n.generators.loc[gens, "bus"].map(n.buses.country).rename("country")
+    gen_country_link = n.links.loc[gens_links, "bus1"].map(n.buses.country).rename("country")
+    rfnbo_country = n.links.loc[rfnbo_links, "bus0"].map(n.buses.country).rename("country")
+    methanolisation_country = n.links.loc[methanolisation, "bus2"].map(n.buses.country).rename("country")
+
+    vre_gen = p_gen.groupby(gen_country).sum()
+    
+    vre_link = p_gen_link.groupby(gen_country_link).sum()
+    
+    vre_total = vre_gen + vre_link
+    rfnbo = p_rfnbo.groupby(rfnbo_country).sum()
+    methanolisation_total = methanolisation_elec_consumption.groupby(methanolisation_country).sum()
+    rfnbo_total = rfnbo + methanolisation_total
+    #allign countries
+    common_countries = sorted(list(
+    set(vre_total.coords["country"].values) & 
+    set(rfnbo_total.coords["country"].values) &
+    set(rhs_xr.country.values)))
+    
+    active_countries = _rfnbo_active_countries(common_countries, criterion_type="vre", log_prefix="Interconnected Annual PPA")
+    if not active_countries:
+        logger.info("No countries qualify for the Annual PPA interconnected constraint. Skipping.")
+        return
+    
+    lhs_list = []
+    for c in active_countries:
+        zone = (neighbours.get(c, set()) | {c}) & set(common_countries)
+        combined = vre_total.sel(country=list(zone)).sum("country")
+        lhs_list.append(combined)
+    
+    lhs = linopy.expressions.merge(lhs_list, dim="country").assign_coords(country=active_countries)
+    vre_total_annual = lhs.sum("snapshot").sel(country=active_countries)
+    rfnbo_annual = rfnbo_total.sum("snapshot").sel(country=active_countries)
+    rhs_annual = rhs_xr.sum("snapshot").sel(country=active_countries)
+    n.model.add_constraints(
+        vre_total_annual - rhs_annual >= rfnbo_annual,
+        name="annual_ppa_interconnected",
+        coords={"country": active_countries}
+        )
+
+    logger.info("Annual PPA interconnected constraint added.")
 
     
 # def add_global_temporal_correlation_constraint(n: pypsa.Network, sns: pd.DatetimeIndex):
@@ -2527,7 +2700,6 @@ def add_temporal_correlation_monthly_constraint_add(n: pypsa.Network, sns: pd.Da
         "No countries eligible for monthly temporal correlation constraint, skipping"
      )
      return
-    print(rfnbo_monthly_total)
     lhs_vre = vre_monthly.sel(country=active_countries)
     lhs_baseline = rhs_xr.sel(country=active_countries)
     rhs_rfnbo = rfnbo_monthly_total.sel(country=active_countries)
@@ -2622,7 +2794,6 @@ def add_temporal_correlation_monthly_constraint_no_add(n: pypsa.Network, sns: pd
         "No countries eligible for monthly temporal correlation constraint, skipping"
      )
      return
-    print(rfnbo_monthly_total)
     lhs_vre = vre_monthly.sel(country=active_countries)
     lhs_baseline = rhs_xr.sel(country=active_countries)
     rhs_rfnbo = rfnbo_monthly_total.sel(country=active_countries)
@@ -2635,6 +2806,73 @@ def add_temporal_correlation_monthly_constraint_no_add(n: pypsa.Network, sns: pd
     )
     
     logger.info("Monthly temporal correlation constraint added.")
+    
+def add_temporal_correlation_monthly_interconnected_constraint_no_add(n: pypsa.Network, sns: pd.DatetimeIndex):
+    """
+    Adds temporal correlation constraint interconnected on a monthly basis.
+    """
+    generator_types = list(
+        set(config["electricity"]["renewable_carriers"] + ["solar rooftop","geothermal organic rankine cycle"])
+    )
+    neighbours = get_country_neighbours(n)
+    p_gen = n.model["Generator-p"].sel(snapshot=sns)
+    p_gen_link = n.model["Link-p"].sel(snapshot=sns)
+    p_rfnbo = n.model["Link-p"].sel(snapshot=sns)
+
+    gens = n.generators[(n.generators.build_year >= monthly_year) & (n.generators.carrier.isin(generator_types))].index
+    gens_link = n.links[(n.links.build_year >= monthly_year) & (n.links.carrier.isin(generator_types))].index
+    rfnbo_technology_carriers = ["H2 Electrolysis", "Haber-Bosch"]
+    rfnbo_links = n.links[(n.links.build_year >= monthly_year) & (n.links.carrier.isin(rfnbo_technology_carriers))].index
+    methanolisation = n.links[(n.links.build_year >= monthly_year) & (n.links.carrier == "methanolisation")].index
+    eff_methanolisation = n.links.loc[methanolisation, "efficiency2"].abs()
+    eff_methanolisation.index.name = "name"
+
+    gen_country = n.generators.loc[gens, "bus"].map(n.buses.country).rename("country")
+    gen_country_link = n.links.loc[gens_link, "bus1"].map(n.buses.country).rename("country")
+    rfnbo_country = n.links.loc[rfnbo_links, "bus0"].map(n.buses.country).rename("country")
+    methanolisation_country = n.links.loc[methanolisation, "bus2"].map(n.buses.country).rename("country")
+
+    gen_monthly = p_gen.sel(name=gens).groupby(gen_country).sum().groupby("snapshot.month").sum()
+    link_monthly = p_gen_link.sel(name=gens_link).groupby(gen_country_link).sum().groupby("snapshot.month").sum()
+    vre_monthly = gen_monthly + link_monthly
+
+    rfnbo_monthly = p_rfnbo.sel(name=rfnbo_links).groupby(rfnbo_country).sum().groupby("snapshot.month").sum()
+    p_methanolisation_elec = p_rfnbo.sel(name=methanolisation) * eff_methanolisation
+    methanolisation_monthly = (
+        p_methanolisation_elec.groupby(methanolisation_country)
+        .sum()
+        .groupby("snapshot.month")
+        .sum()
+    )
+    rfnbo_monthly_total = rfnbo_monthly + methanolisation_monthly
+    
+    common_countries = list(
+        set(vre_monthly.coords["country"].values) & 
+        set(rfnbo_monthly_total.coords["country"].values)
+    )
+    active_countries = _rfnbo_active_countries(common_countries, criterion_type="vre", log_prefix="Interconnected Monthly RFNBO")
+    if not active_countries:
+        logger.info("No countries qualify for the Monthly interconnected constraint. Skipping.")
+        return
+    
+    lhs_list = []
+    for c in active_countries:
+        zone = (neighbours.get(c, set()) | {c}) & set(common_countries)
+        combined = vre_monthly.sel(country=list(zone)).sum("country")
+        lhs_list.append(combined)
+    
+    lhs = linopy.expressions.merge(lhs_list, dim="country").assign_coords(country=active_countries)
+    lhs_vre = lhs.sel(country=active_countries)
+    rhs_rfnbo = rfnbo_monthly_total.sel(country=active_countries)
+    
+    unique_months = sorted(list(set(sns.month)))
+    n.model.add_constraints(
+        lhs_vre >= rhs_rfnbo,
+        name="temporal_correlation_monthly_interconnected",
+        coords={"month": unique_months, "country": active_countries}
+    )
+    
+    logger.info("Monthly temporal correlation interconnected constraint added.")
  
 # def add_global_temporal_correlation_monthly_constraint(n: pypsa.Network, sns: pd.DatetimeIndex):
 #     """
@@ -3241,10 +3479,12 @@ def extra_functionality(
       if investment_year >= 2040:
         add_additionality_constraint(n)
         add_annual_ppa_constraint(n, snapshots)
-     else: 
-      raise NotImplementedError("Additionality constraint not implemented yet for this variant")
-    if constraints["interconnected_additionality"]: 
-       raise NotImplementedError("Interconnected additionality constraint not implemented yet")
+     else:
+      if snakemake.config["run"]["name"].startswith(("RFNBO")):
+       if not constraints["interconnected_additionality"]:
+        raise NotImplementedError("Additionality constraint not implemented yet for this variant")
+    # if constraints["interconnected_additionality"]: 
+    #    raise NotImplementedError("Interconnected additionality constraint not implemented yet")
     #    if investment_year >= 2035:
     #     add_additionality_constraint_interconnected(n)
     if constraints["global_additionality"]:
@@ -3287,11 +3527,13 @@ def extra_functionality(
         add_temporal_correlation_monthly_constraint_add(n, snapshots)
       else:
         add_temporal_correlation_monthly_constraint_no_add(n, snapshots)
-     else: 
-      raise NotImplementedError("Temporal correlation constraint not implemented yet for this variant")
+     else:
+      if snakemake.config["run"]["name"].startswith(("RFNBO")):
+       if not constraints["interconnected_temporal_correlation"]:
+        raise NotImplementedError("Temporal correlation constraint not implemented yet for this variant")
     
-    if constraints["interconnected_temporal_correlation"]: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
-       raise NotImplementedError("Interconnected temporal correlation constraint not implemented yet")
+    # if constraints["interconnected_temporal_correlation"]: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
+    #    raise NotImplementedError("Interconnected temporal correlation constraint not implemented yet")
     #    if investment_year >= 2035:
     #     add_temporal_correlation_interconnected(n, snapshots)
     if constraints["global_temporal_correlation"]: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
@@ -3304,7 +3546,15 @@ def extra_functionality(
        raise NotImplementedError("Global temporal correlation monthly constraint not implemented yet")
     #    if investment_year >= 2035:
     #     add_global_temporal_correlation_monthly_constraint(n, snapshots)
-    
+    if constraints["interconnected_additionality"]:
+      if investment_year >= 2030:
+        add_additionality_constraint_interconnected(n)
+        add_annual_ppa_interconnected_constraint(n, snapshots)
+    if constraints["interconnected_temporal_correlation"]:
+      if investment_year >= 2030:
+         add_temporal_correlation_interconnected(n, snapshots)
+      else:
+         add_temporal_correlation_monthly_interconnected_constraint_no_add(n, snapshots)
     if constraints["RFNBO_demand_share"]: #!!! TO BE CHECKED & ADAPTED FOR VARAIANTS
      if investment_year >= 2030:
         add_RFNBO_demand_share_constraint(n)
@@ -3563,13 +3813,11 @@ if __name__ == "__main__":
     investment_year = int(snakemake.wildcards.planning_horizons[-4:])
     previous_year = investment_year - 5
     
-    if config["run"]["name"] in [""]:
-        temporal_year = 2025
-        monthly_year = 2025
-    elif config["run"]["name"] in ["RFNBO_CR","RFNBO_CR-force","RFNBO_Add","RFNBO_Temp","RFNBO_VAR-A2","RFNBO_VAR-A1","RFNBO_VAR-T1","RFNBO_VAR-T1-bis","RFNBO_VAR-SUN","RFNBO_VAR-MS"]:
+    if config["run"]["name"] in ["RFNBO_CR","RFNBO_CR-force","RFNBO_Add","RFNBO_Temp","RFNBO_VAR-A2","RFNBO_VAR-A1","RFNBO_VAR-T1","RFNBO_VAR-T1-bis","RFNBO_VAR-SUN","RFNBO_VAR-MS","RFNBO_INT"]:
         temporal_year = 2025 # for hourly temporal correlation & annual ppa: select techno built at that moment or later.
         monthly_year = 2025 # for hourly temporal correlation & annual ppa: select techno built at that moment or later.
     else:
+      if snakemake.config["run"]["name"].startswith(("RFNBO")):
         raise NotImplementedError("Temporal and monthly years not implemented yet for this variant")
 
     if investment_year >= 2030 and (
