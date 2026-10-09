@@ -107,13 +107,7 @@ def logo():
 
 
 def build_filename(cluster,opt,sector_opt,planning_horizon):
-    prefix=f"results/{study}/networks/base_"
-    return prefix+"s_{cluster}_{opt}_{sector_opt}_{planning_horizon}.nc".format(
-        cluster=cluster,
-        opt=opt,
-        sector_opt=sector_opt,
-        planning_horizon=planning_horizon
-    )
+    return f"results/{study}/networks/solved_{planning_horizon}.nc"
 
 def load_file(filename):
     # Use pypsa.Network to load the network from the filename
@@ -129,13 +123,7 @@ def load_files(study, planning_horizons, cluster, opt, sector_opt):
 #uploading baseline network files to retrieve co2 prices for co2 price plot as they are computed in baseline as shadow
 #price and then implemented in other RFNBO scenarios as costs
 def build_filename_baseline(cluster,opt,sector_opt,planning_horizon):
-    prefix="results/baseline/networks/base_"
-    return prefix+f"s_{cluster}_{opt}_{sector_opt}_{planning_horizon}.nc".format(
-        cluster=cluster,
-        opt=opt,
-        sector_opt=sector_opt,
-        planning_horizon=planning_horizon
-    )
+    return f"results/baseline/networks/solved_{planning_horizon}.nc"
 
 def load_file_baseline(filename_baseline):
     # Use pypsa.Network to load the network from the filename

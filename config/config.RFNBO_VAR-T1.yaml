@@ -3,7 +3,7 @@
 # yaml-language-server: $schema=./schema.default.json
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#version
-version: v2026.02.0
+version: v2026.09.0
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#tutorial
 tutorial: false
@@ -33,6 +33,15 @@ run:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#foresight
 foresight: myopic
+
+planning_horizons:
+  - 2025
+  - 2030
+  - 2035
+  - 2040
+  - 2045
+  - 2050
+
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#scenario
 scenario:
@@ -291,13 +300,11 @@ enable:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#co2_budget
 co2_budget:
-  2020: 0.72
-  2025: 0.648
-  2030: 0.45
-  2035: 0.25
-  2040: 0.1
-  2045: 0.05
-  2050: 0.0
+  emissions_scope: CO2
+  relative: true
+  # Global cap stays off. National budgets/prices are applied in solve_network.py.
+  upper: null
+  lower: null
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#electricity
 electricity:
@@ -645,7 +652,7 @@ lines:
     750.0: "Al/St 560/50 4-bundle 750.0"
   s_max_pu: 0.7
   s_nom_max: .inf
-  max_extension: 20000
+  s_nom_max_extension: 20000
   length_factor: 1.25
   reconnect_crimea: true
   under_construction: keep
@@ -661,7 +668,7 @@ links:
   p_max_pu: 1.0
   p_min_pu: -1.0
   p_nom_max: .inf
-  max_extension: 30000
+  p_nom_max_extension: 30000
   length_factor: 1.25
   under_construction: keep
 
@@ -819,6 +826,7 @@ existing_capacities:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#sector
 sector:
+  enabled: true
   transport: true
   heating: true
   biomass: true
@@ -1311,6 +1319,7 @@ clustering:
     remove_stubs: true
     remove_stubs_across_borders: false
   cluster_network:
+    n_clusters: 33
     algorithm: kmeans
     hac_features:
     - wnd100m
@@ -1324,8 +1333,9 @@ clustering:
       ramp_limit_down: max
     buses: {}
   temporal:
-    resolution_elec: false
-    resolution_sector: false
+    averaging: 2h
+    segmentation: false
+    representative: false
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#adjustments
 adjustments:

@@ -13,7 +13,7 @@ rule run_snakefile_RFNBO:
     output: touch("run_snakefile_RFNBO.done")
     log: "logs/run_snakefile_RFNBO.done",
     shell:
-        "snakemake --snakefile Snakefile_RFNBO --cores 1 -call prepare_results"
+        "snakemake --snakefile Snakefile_RFNBO_CR --cores 1 -call prepare_results"
 
 
 rule run_all_snakefiles:

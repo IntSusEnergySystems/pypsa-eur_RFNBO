@@ -11,7 +11,7 @@ The workflow compares a baseline decarbonisation pathway with several RFNBO poli
 
 ## Acknowledgements
 
-This work is based on [PyPSA-Eur v2026.02.0](https://github.com/PyPSA/pypsa-eur). Please cite the original model if you use this repository:
+This work is based on [PyPSA-Eur v2026.09.0](https://github.com/PyPSA/pypsa-eur). Please cite the original model if you use this repository:
 
 > T. Brown, J. Hörsch, D. Schlachtberger, *PyPSA-Eur: An Open Optimisation Model
 > of the European Transmission System*, 2018,
@@ -168,10 +168,10 @@ To test the optimisation without rebuilding SEPIA HTML outputs, target the solve
 
 ```bash
 snakemake --snakefile Snakefile_baseline --cores 8 -call \
-  results/baseline/networks/base_s_2__6H_2030.nc
+  results/baseline/networks/solved_2030.nc
 ```
 
-Wildcards must match the active `scenario` settings in the config file.
+The solved-network name is `solved_{horizon}.nc`. Cluster count and temporal resolution live in the config (`clustering.cluster_network.n_clusters`, `clustering.temporal.averaging`), not in the filename.
 
 ## Quick test run (France + Belgium, 6-hourly)
 
@@ -181,12 +181,12 @@ The full European model is slow. For a fast local smoke test, restrict the model
 
 [`Snakefile_quick_test_chain`](Snakefile_quick_test_chain) reads only:
 
-- [`config/config.quick_test_chain.yaml`](config/config.quick_test_chain.yaml) — countries, `scenario.clusters`, `scenario.sector_opts`, solver settings, `solving.mem_mb`, and multi-scenario `run.name`
+- [`config/config.quick_test_chain.yaml`](config/config.quick_test_chain.yaml) — countries, `clustering.cluster_network.n_clusters`, `clustering.temporal.averaging`, solver settings, `solving.mem_mb`, and multi-scenario `run.name`
 - [`config/scenarios.quick_test_chain.yaml`](config/scenarios.quick_test_chain.yaml) — per-scenario constraint overrides (CO₂ policy, RFNBO criteria)
 
 The individual scenario configs (`config.baseline.yaml`, `config.RFNBO_*.yaml`, …) are **not** used by the quick-test chain and can stay at full-model defaults (33 clusters, full country list).
 
-Shipped quick-test defaults: **BE** and **FR**, **2** clusters, **`6H`** resolution, Gurobi **8** threads, solve memory **90** GB (`mem_mb: 90000`). To change countries, resolution, or memory, edit `config/config.quick_test_chain.yaml` directly. Keep `scenario.clusters` equal to the number of countries so result paths stay consistent (e.g. `base_s_2__6H_2030.nc`).
+`config/config.quick_test_chain.yaml` is the 33-cluster, 6-hourly setup (`clustering.temporal.averaging: 6h`) for the country list in that file. The 2-country, 2-cluster file is `config/config.quick_test_chain_2.yaml`. Solved files are `results/{run}/networks/solved_{horizon}.nc`.
 
 **BE+FR calibration (required for feasible solves):** national CO₂ budgets in
 `config/config.quick_test_chain.yaml` are relaxed relative to the full-Europe
@@ -227,7 +227,7 @@ For the quickest check, solve one horizon for one scenario only:
 
 ```bash
 snakemake --snakefile Snakefile_quick_test_chain --cores 8 -call \
-  results/RFNBO_CR/networks/base_s_2__6H_2030.nc
+  results/RFNBO_CR/networks/solved_2030.nc
 ```
 
 ### 2b. Run scenarios separately (full model)
@@ -245,25 +245,25 @@ Per-scenario logs are kept separately for debugging infeasibilities:
 | Log type | Location |
 |----------|----------|
 | Snakemake rule logs | `logs/{run}/` (e.g. `logs/baseline/prepare_sector_network_*.log`) |
-| Gurobi solver | `results/{run}/logs/base_s_*_solver.log` |
-| Python solve trace | `results/{run}/logs/base_s_*_python.log` |
-| Memory profile | `results/{run}/logs/base_s_*_memory.log` |
+| Gurobi solver | `results/{run}/logs/solve_network/solver_{horizon}.log` |
+| Python solve trace | `results/{run}/logs/solve_network/python_{horizon}.log` |
+| Memory profile | `results/{run}/logs/solve_network/memory_{horizon}.log` |
 | Combined tee | `logs/quick_test_chain.log` |
 
 ### 3. Verify success
 
 | Check | What to look for |
 |-------|------------------|
-| Solved network | `results/<scenario>/networks/base_s_2__6H_2030.nc` exists |
-| Gurobi optimality | `grep 'Optimal objective' results/<scenario>/logs/base_s_2__6H_2030_solver.log` |
-| Python log | No traceback in `results/<scenario>/logs/base_s_2__6H_2030_python.log` |
+| Solved network | `results/<scenario>/networks/solved_2030.nc` exists |
+| Gurobi optimality | `grep 'Optimal objective' results/<scenario>/logs/solve_network/solver_2030.log` |
+| Python log | No traceback in `results/<scenario>/logs/solve_network/python_2030.log` |
 | SEPIA dashboard | `results/<scenario>/htmls/BE_demands_<scenario>.html` exists (36 files per three-scenario chain) |
 
 Quick commands:
 
 ```bash
-ls -lh results/baseline/networks/base_s_2__6H_*.nc
-grep 'Optimal objective' results/baseline/logs/base_s_2__6H_*_solver.log
+ls -lh results/baseline/networks/solved_*.nc
+grep 'Optimal objective' results/baseline/logs/solve_network/solver_*.log
 ```
 
 ### Temporal resolution notes

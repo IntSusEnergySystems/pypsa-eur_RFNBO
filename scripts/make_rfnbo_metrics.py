@@ -390,16 +390,10 @@ def _dev_snakemake(run_name: str = "baseline"):
         with open(root / cfg) as fh:
             config.update(yaml.safe_load(fh))
 
-    scenario = config["scenario"]
+    horizons = config.get("planning_horizons") or config["scenario"]["planning_horizons"]
     networks = [
-        str(
-            root
-            / f"results/{run_name}/networks/base_s_{cluster}_{opt}_{sector_opt}_{horizon}.nc"
-        )
-        for cluster in scenario["clusters"]
-        for opt in scenario["opts"]
-        for sector_opt in scenario["sector_opts"]
-        for horizon in scenario["planning_horizons"]
+        str(root / f"results/{run_name}/networks/solved_{horizon}.nc")
+        for horizon in horizons
     ]
     output_path = root / f"results/{run_name}/csvs/rfnbo_metrics.csv"
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -409,7 +403,7 @@ def _dev_snakemake(run_name: str = "baseline"):
     return SimpleNamespace(
         input=SimpleNamespace(networks=networks),
         output=SimpleNamespace(rfnbo_metrics=str(output_path)),
-        params=SimpleNamespace(scenario=scenario),
+        params=SimpleNamespace(planning_horizons=horizons),
         config=config,
         log={"python": str(log_path)},
         rule="make_rfnbo_metrics",
@@ -445,7 +439,7 @@ if __name__ == "__main__":
     network_paths = {
         horizon_from_network_path(path): path for path in snakemake.input.networks
     }
-    horizons = [str(h) for h in snakemake.params.scenario["planning_horizons"]]
+    horizons = [str(h) for h in snakemake.params.planning_horizons]
 
     metrics_table(network_paths, horizons=horizons).to_csv(
         snakemake.output.rfnbo_metrics
